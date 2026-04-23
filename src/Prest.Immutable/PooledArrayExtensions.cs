@@ -26,7 +26,7 @@ public static class PooledArrayExtensions
             }
 
 #if NET8_0_OR_GREATER
-            return ImmutableArray.Create(span);
+            return [..span];
 #else
             var builder = ImmutableArray.CreateBuilder<T>(span.Length);
             for (var i = 0; i < span.Length; i++)

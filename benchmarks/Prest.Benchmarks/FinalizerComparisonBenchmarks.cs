@@ -3,9 +3,8 @@ using BenchmarkDotNet.Attributes;
 namespace Prest.Benchmarks;
 
 /// <summary>
-/// Compares hash-finalizer choices for each algorithm on int keys at a fixed N.
-/// Sequential int keys expose the raw <c>GetHashCode</c> → <c>hash &amp; mask</c>
-/// clustering that a finalizer can fix.
+/// Measures the cost of each hash finalizer on sequential int keys — the workload
+/// most likely to expose clustering that a finalizer would fix (or regress).
 /// </summary>
 [MemoryDiagnoser]
 public class FinalizerComparisonBenchmarks

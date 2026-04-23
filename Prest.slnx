@@ -1,4 +1,17 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path=".globalconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="LICENSE" />
+    <File Path="Makefile" />
+    <File Path="README.md" />
+    <File Path="coverage.settings.xml" />
+    <File Path="global.json" />
+    <File Path="nuget.config" />
+  </Folder>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Prest.Benchmarks/Prest.Benchmarks.csproj" />
   </Folder>

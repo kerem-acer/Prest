@@ -3,6 +3,7 @@ namespace Prest.ObjectPool.Tests;
 public class PooledHashPoolTests
 {
     [Test]
+    [NotInParallel("PooledHashMapPool<int,int>")]
     public async Task HashMapPool_RentAfterReturn_ReusesInstance()
     {
         // Act
@@ -20,6 +21,7 @@ public class PooledHashPoolTests
     }
 
     [Test]
+    [NotInParallel("PooledHashMapPool<int,string>")]
     public async Task HashMapPool_Dispose_ReturnsToPool()
     {
         // Act — Dispose should route the instance back to the pool (via the subclass override).
@@ -37,6 +39,7 @@ public class PooledHashPoolTests
     }
 
     [Test]
+    [NotInParallel("PooledHashMapPool<string,int>")]
     public async Task HashMapPool_Rent_UsableAfterAdd()
     {
         // Arrange
@@ -54,6 +57,7 @@ public class PooledHashPoolTests
     }
 
     [Test]
+    [NotInParallel("PooledHashSetPool<int>")]
     public async Task HashSetPool_RentAfterReturn_ReusesInstance()
     {
         var first = PooledHashSetPool<int>.Create();
@@ -69,6 +73,7 @@ public class PooledHashPoolTests
     }
 
     [Test]
+    [NotInParallel("PooledHashSetPool<long>")]
     public async Task HashSetPool_Dispose_ReturnsToPool()
     {
         var first = PooledHashSetPool<long>.Create();
@@ -84,6 +89,7 @@ public class PooledHashPoolTests
     }
 
     [Test]
+    [NotInParallel("PooledHashSetPool<int>")]
     public async Task HashSetPool_Rent_UsableAfterAdd()
     {
         var set = PooledHashSetPool<int>.Create();

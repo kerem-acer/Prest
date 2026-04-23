@@ -5,7 +5,7 @@ Zero-allocation pooled collections for .NET with pluggable, zero-cost hash-table
 ## Highlights
 
 - **Pooled backing store.** Arrays come from `ArrayPool<T>.Shared`; `Dispose` returns them. Single-consumer ownership — no locking, no concurrent mutation.
-- **Pluggable hash algorithm.** `PooledHashMap<K,V>` and `PooledHashSet<T>` pick a probe strategy at the type-parameter level: **Swiss** (SIMD, default), **RobinHood** (churn-friendly), **Linear** (simplest), **Chained** (iteration-friendly). The algorithm is a `struct` generic — the JIT monomorphizes every call end-to-end. No virtual dispatch, no boxing.
+- **Pluggable hash algorithm.** `PooledHashMap<K,V>` and `PooledHashSet<T>` pick a probe strategy at the type-parameter level: **Swiss** (SIMD group scan; default, matches .NET 9's `Dictionary`), **RobinHood** (displacement-tracking linear, backward-shift on erase — no tombstones), **Linear** (simplest), **Chained** (dense entry storage, iteration-friendly). The algorithm is a `struct` generic — the JIT monomorphizes every call end-to-end. No virtual dispatch, no boxing.
 - **Auto-return-on-`Dispose`.** `PooledHashMap<K,V>.Create()` rents from a per-thread cache; `using` disposes back into that cache so the next rental on the same thread skips allocation entirely.
 - **Concurrent pool for `await` code.** `Prest.ObjectPool` ships `PooledHashMapPool<K,V>` / `PooledHashSetPool<T>` / `PooledBufferWriterPool<T>` backed by `Microsoft.Extensions.ObjectPool.DefaultObjectPool` — safe across threads, survives `await`, `Dispose` auto-returns to the pool.
 - **Zero-allocation enumeration.** `foreach`, `.Keys`, `.Values` all return value-type enumerators — no `IEnumerator<T>` boxing.
@@ -58,7 +58,7 @@ Console.WriteLine($"ContainsKey(1): {map.ContainsKey(1)}");  // False
 
 ### Hash map / hash set
 
-The default `PooledHashMap<K,V>` / `PooledHashSet<T>` close over SwissTable — fastest all-round. `Create(capacity)` rents from a per-thread cache, `Dispose` returns to it.
+The default `PooledHashMap<K,V>` / `PooledHashSet<T>` close over SwissTable — the same algorithm .NET 9's `Dictionary` moved to, chosen as a reasonable starting point for mixed workloads. `Create(capacity)` rents from a per-thread cache, `Dispose` returns to it. See [**Choosing an algorithm**](#choosing-an-algorithm) for when to pick a different one.
 
 ```csharp
 using var map = PooledHashMap<int, string>.Create(capacity: 16);
@@ -243,10 +243,16 @@ using var back = PooledArray.FromImmutableArray(immutable);
 
 | Algorithm | Probe | Best for | Notes |
 |---|---|---|---|
-| **Swiss** *(default)* | Triangular, 16-byte SIMD group scan | Balanced / all-round | Highest peak lookup throughput. |
-| **RobinHood** | Linear with displacement tracking | Heavy churn (frequent add/remove) | Backward-shift on removal keeps displacements monotonic — no tombstones. |
+| **Swiss** *(default)* | Triangular, 16-byte SIMD group scan | Mixed read/write workloads with well-distributed keys | Matches .NET 9's `Dictionary`. Uses tombstones on erase, which can degrade under heavy churn if keys hash densely — pair with a finalizer or pick RobinHood if you're churning sequential-int keys. SIMD path is fastest on x86 (single-instruction `PMOVMSKB`); ARM64 synthesizes `ExtractMostSignificantBits` in several instructions, so the Swiss-vs-alternatives gap narrows there. |
+| **RobinHood** | Linear with displacement tracking | Integer-keyed hot paths; churn-heavy workloads; ARM64 | Backward-shift on erase keeps displacements monotonic — no tombstones, no pathological churn. Fastest algorithm for integer-keyed lookup on ARM64 in our benchmarks (~37% faster than `Dictionary`, ~37% faster than Swiss). |
 | **Linear** | One slot at a time, scalar | Tiny maps, debugging, a baseline for comparisons | Simplest; no SIMD win but no SIMD cost on cold code paths either. |
 | **Chained** | Separate chaining with dense entry array | Iteration-heavy workloads | Entries are packed `0..Count-1`, so `foreach` walks a dense array. |
+
+**Quick rule of thumb:**
+
+- Start with the default Swiss. It is within a few percent of `Dictionary` on lookup workloads and roughly 10–20% faster than `Dictionary` on `Add` (thanks to pooled arrays — no allocation).
+- If you do heavy add/remove churn on `int`/`long` keys, switch to `RobinHood` **or** keep Swiss and pair it with `FibonacciFinalizer`. Sequential or tightly-packed integer keys combined with identity hashing + tombstones is the one workload where Swiss can regress badly.
+- If your app is read-mostly and iterates maps often, `Chained` gives you the densest enumeration path.
 
 ## Choosing a finalizer
 
@@ -285,8 +291,11 @@ dotnet run --project examples/Prest.Examples -c Release
 `benchmarks/Prest.Benchmarks/` — [BenchmarkDotNet](https://benchmarkdotnet.org/) suites:
 
 - `PooledHashMapBenchmarks.cs` — `PooledHashMap<int,int>` vs `Dictionary<int,int>` vs `Faster.Map.DenseMap<int,int>` across lookup (hit + miss), `ContainsKey`, insert-from-empty, and steady-state churn at N ∈ {16, 256, 4096, 65536}.
+- `PooledHashMapStringBenchmarks.cs` — same comparisons on `string`-keyed maps.
 - `AlgorithmComparisonBenchmarks.cs` — the four algorithms head-to-head.
 - `FinalizerComparisonBenchmarks.cs` — `NoOp` / `Fibonacci` / `Lowbias32` / `XMX` on Swiss and RobinHood with sequential-int keys.
+
+Latest results are committed under [`benchmarks/artifacts/results/`](./benchmarks/artifacts/results) (`-report-github.md` files render directly on GitHub).
 
 ```bash
 dotnet run --project benchmarks/Prest.Benchmarks -c Release -- --filter '*'

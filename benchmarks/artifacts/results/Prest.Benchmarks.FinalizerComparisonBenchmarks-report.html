@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Prest.Benchmarks.FinalizerComparisonBenchmarks-20260423-215446</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.8, macOS Tahoe 26.0.1 (25A362) [Darwin 25.0.0]
+Apple M4 Max, 1 CPU, 16 logical and 16 physical cores
+.NET SDK 10.0.202
+  [Host]     : .NET 10.0.6 (10.0.6, 10.0.626.17701), Arm64 RyuJIT armv8.0-a
+  DefaultJob : .NET 10.0.6 (10.0.6, 10.0.626.17701), Arm64 RyuJIT armv8.0-a
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>Method       </th><th>Mean</th><th>Error</th><th>StdDev</th><th>Ratio</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>Swiss_Identity</td><td>78.61 &mu;s</td><td>0.200 &mu;s</td><td>0.178 &mu;s</td><td>1.00</td><td>-</td><td>NA</td>
+</tr><tr><td>Swiss_Lowbias32</td><td>132.25 &mu;s</td><td>0.531 &mu;s</td><td>0.471 &mu;s</td><td>1.68</td><td>-</td><td>NA</td>
+</tr><tr><td>Swiss_Fibonacci</td><td>108.77 &mu;s</td><td>0.491 &mu;s</td><td>0.459 &mu;s</td><td>1.38</td><td>-</td><td>NA</td>
+</tr><tr><td>Swiss_Xmx</td><td>132.70 &mu;s</td><td>0.547 &mu;s</td><td>0.512 &mu;s</td><td>1.69</td><td>-</td><td>NA</td>
+</tr><tr><td>RobinHood_Identity</td><td>49.73 &mu;s</td><td>0.183 &mu;s</td><td>0.153 &mu;s</td><td>0.63</td><td>-</td><td>NA</td>
+</tr><tr><td>RobinHood_Fibonacci</td><td>85.02 &mu;s</td><td>0.367 &mu;s</td><td>0.325 &mu;s</td><td>1.08</td><td>-</td><td>NA</td>
+</tr></tbody></table>
+</body>
+</html>

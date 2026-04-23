@@ -3,8 +3,8 @@ using BenchmarkDotNet.Attributes;
 namespace Prest.Benchmarks;
 
 /// <summary>
-/// Compares all four pluggable <c>IHashAlgorithm</c> implementations against
-/// Dictionary on the same workloads.
+/// Isolates the four <see cref="IHashAlgorithm{TSlot,TKey}" /> implementations from
+/// the rest of the stack by running the same steady-state lookup against each.
 /// </summary>
 [MemoryDiagnoser]
 public class AlgorithmComparisonBenchmarks

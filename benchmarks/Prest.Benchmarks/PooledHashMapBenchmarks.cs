@@ -4,10 +4,8 @@ using Faster.Map.Core;
 namespace Prest.Benchmarks;
 
 /// <summary>
-/// Compares <c>PooledHashMap&lt;TKey,TValue,TAlgo&gt;</c> against the BCL
-/// <see cref="Dictionary{TKey,TValue}" /> and Faster.Map's
-/// <see cref="DenseMap{TKey,TValue}" /> across operations that dominate real
-/// workloads: hit lookup, miss lookup, insert from empty, and churn.
+/// Compares <see cref="PooledHashMap{TKey,TValue,TAlgo}" /> against <see cref="Dictionary{TKey,TValue}" />
+/// and Faster.Map's <see cref="DenseMap{TKey,TValue}" /> on integer keys.
 /// </summary>
 [MemoryDiagnoser]
 public class PooledHashMapBenchmarks
@@ -45,8 +43,6 @@ public class PooledHashMapBenchmarks
 
     [GlobalCleanup]
     public void Cleanup() => _pooled.Dispose();
-
-    // -------- Lookup (hit) --------
 
     [Benchmark(Baseline = true, Description = "Dictionary.TryGetValue (hit)")]
     public int Dictionary_LookupHit()
@@ -96,8 +92,6 @@ public class PooledHashMapBenchmarks
         return sum;
     }
 
-    // -------- Lookup (miss) --------
-
     [Benchmark(Description = "Dictionary.TryGetValue (miss)")]
     public int Dictionary_LookupMiss()
     {
@@ -145,8 +139,6 @@ public class PooledHashMapBenchmarks
         }
         return count;
     }
-
-    // -------- ContainsKey --------
 
     [Benchmark(Description = "Dictionary.ContainsKey")]
     public int Dictionary_ContainsKey()
@@ -196,8 +188,6 @@ public class PooledHashMapBenchmarks
         return count;
     }
 
-    // -------- Insert from empty --------
-
     [Benchmark(Description = "Dictionary.Add (from empty)")]
     public int Dictionary_Add()
     {
@@ -234,21 +224,17 @@ public class PooledHashMapBenchmarks
         return map.Count;
     }
 
-    // -------- Churn: repeatedly add + remove at stable size --------
-
     [Benchmark(Description = "Dictionary add/remove churn")]
     public int Dictionary_Churn()
     {
         var dict = new Dictionary<int, int>(N);
         var keys = _presentKeys;
 
-        // Fill.
         for (var i = 0; i < keys.Length; i++)
         {
             dict.Add(keys[i], keys[i]);
         }
 
-        // One full churn pass: remove each key then re-add with a different value.
         for (var i = 0; i < keys.Length; i++)
         {
             dict.Remove(keys[i]);

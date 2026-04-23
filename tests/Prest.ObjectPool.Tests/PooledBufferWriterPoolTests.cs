@@ -1,10 +1,9 @@
-using Prest.ObjectPool;
-
 namespace Prest.ObjectPool.Tests;
 
 public class PooledBufferWriterPoolTests
 {
     [Test]
+    [NotInParallel("PooledBufferWriterPool<byte>")]
     public async Task RentReturn_RoundTrip_ReusesInstance()
     {
         var first = PooledBufferWriterPool<byte>.Rent();
@@ -26,6 +25,7 @@ public class PooledBufferWriterPoolTests
     }
 
     [Test]
+    [NotInParallel("PooledBufferWriterPool<byte>")]
     public async Task SurvivesAsync_UnlikeThreadstaticCache()
     {
         var writer = PooledBufferWriterPool<byte>.Rent();
