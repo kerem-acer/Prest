@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Faster.Map" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Prest\Prest.csproj" />
+    <ProjectReference Include="..\..\src\Prest.ObjectPool\Prest.ObjectPool.csproj" />
+    <ProjectReference Include="..\..\src\Prest.SystemTextJson\Prest.SystemTextJson.csproj" />
+    <ProjectReference Include="..\..\src\Prest.SystemTextJson.ObjectPool\Prest.SystemTextJson.ObjectPool.csproj" />
+  </ItemGroup>
+
+</Project>

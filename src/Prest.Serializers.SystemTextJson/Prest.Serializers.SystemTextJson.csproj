@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
+    <RootNamespace>Prest.Serializers.SystemTextJson</RootNamespace>
+    <PackageId>Prest.Serializers.SystemTextJson</PackageId>
+    <Description>System.Text.Json converters for Prest pooled collection types (PooledArray, PooledMap). Requires net8.0+ for IUtf8SpanFormattable.</Description>
+    <PackageTags>pool;json;systemtextjson;converter</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prest\Prest.csproj" />
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prest.Serializers.SystemTextJson.Tests" />
+  </ItemGroup>
+
+</Project>

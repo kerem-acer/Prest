@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
+    <RootNamespace>Prest.SystemTextJson</RootNamespace>
+    <PackageId>Prest.SystemTextJson</PackageId>
+    <Description>PooledJsonBufferWriter: Utf8JsonWriter paired with a PooledBufferWriter. Includes a threadstatic instance cache.</Description>
+    <PackageTags>pool;json;utf8jsonwriter;systemtextjson</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prest\Prest.csproj" />
+    <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prest.SystemTextJson.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,18 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+.idea/
+CoverageReport/
+*.DotSettings.user
+coverage*.xml
+TestResults/
+BenchmarkDotNet.Artifacts/
+benchmarks/artifacts/*
+!benchmarks/artifacts/results/
+*.nupkg
+
+# Verify
+*.received.*
+*.received/

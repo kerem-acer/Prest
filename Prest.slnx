@@ -1,0 +1,26 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Prest.Benchmarks/Prest.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/examples/">
+    <Project Path="examples/Prest.Examples/Prest.Examples.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Prest.Immutable/Prest.Immutable.csproj" />
+    <Project Path="src/Prest.ObjectPool/Prest.ObjectPool.csproj" />
+    <Project Path="src/Prest.Serializers.SystemTextJson/Prest.Serializers.SystemTextJson.csproj" />
+    <Project Path="src/Prest.Serializers.VYaml/Prest.Serializers.VYaml.csproj" />
+    <Project Path="src/Prest.SystemTextJson.ObjectPool/Prest.SystemTextJson.ObjectPool.csproj" />
+    <Project Path="src/Prest.SystemTextJson/Prest.SystemTextJson.csproj" />
+    <Project Path="src/Prest/Prest.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Prest.Immutable.Tests/Prest.Immutable.Tests.csproj" />
+    <Project Path="tests/Prest.ObjectPool.Tests/Prest.ObjectPool.Tests.csproj" />
+    <Project Path="tests/Prest.Serializers.SystemTextJson.Tests/Prest.Serializers.SystemTextJson.Tests.csproj" />
+    <Project Path="tests/Prest.Serializers.VYaml.Tests/Prest.Serializers.VYaml.Tests.csproj" />
+    <Project Path="tests/Prest.SystemTextJson.ObjectPool.Tests/Prest.SystemTextJson.ObjectPool.Tests.csproj" />
+    <Project Path="tests/Prest.SystemTextJson.Tests/Prest.SystemTextJson.Tests.csproj" />
+    <Project Path="tests/Prest.Tests/Prest.Tests.csproj" />
+  </Folder>
+</Solution>

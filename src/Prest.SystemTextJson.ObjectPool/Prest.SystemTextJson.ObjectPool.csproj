@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
+    <RootNamespace>Prest.SystemTextJson.ObjectPool</RootNamespace>
+    <PackageId>Prest.SystemTextJson.ObjectPool</PackageId>
+    <Description>Microsoft.Extensions.ObjectPool-based accessor for PooledJsonBufferWriter. Use when pooling must survive await boundaries.</Description>
+    <PackageTags>pool;json;systemtextjson;objectpool</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Prest.SystemTextJson\Prest.SystemTextJson.csproj" />
+    <PackageReference Include="Microsoft.Extensions.ObjectPool" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prest.SystemTextJson.ObjectPool.Tests" />
+  </ItemGroup>
+
+</Project>
