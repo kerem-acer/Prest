@@ -1,5 +1,10 @@
 # Prest
 
+[![NuGet](https://img.shields.io/nuget/v/Prest.svg?label=nuget)](https://www.nuget.org/packages/Prest)
+[![Downloads](https://img.shields.io/nuget/dt/Prest.svg)](https://www.nuget.org/packages/Prest)
+[![CI](https://github.com/kerem-acer/Prest/actions/workflows/ci.yml/badge.svg)](https://github.com/kerem-acer/Prest/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 Zero-allocation pooled collections for .NET with pluggable, zero-cost hash-table algorithms.
 
 ## Highlights
@@ -14,21 +19,43 @@ Zero-allocation pooled collections for .NET with pluggable, zero-cost hash-table
 
 ## Packages
 
-| Package | Purpose |
-|---|---|
-| [`Prest`](./src/Prest) | Core — `PooledHashMap<K,V>`, `PooledHashSet<T>`, algorithm/finalizer/hasher structs, `PooledArray<T>`, `PooledList<T>`, `PooledBufferWriter<T>` |
-| [`Prest.ObjectPool`](./src/Prest.ObjectPool) | `DefaultObjectPool`-backed `PooledHashMapPool<K,V>`, `PooledHashSetPool<T>`, `PooledBufferWriterPool<T>` for `await`-safe rent/return |
-| [`Prest.SystemTextJson`](./src/Prest.SystemTextJson) | `PooledJsonBufferWriter` (pairs `Utf8JsonWriter` with `PooledBufferWriter<byte>`) + threadstatic cache |
-| [`Prest.SystemTextJson.ObjectPool`](./src/Prest.SystemTextJson.ObjectPool) | `DefaultObjectPool`-backed accessor for `PooledJsonBufferWriter` |
-| [`Prest.Serializers.SystemTextJson`](./src/Prest.Serializers.SystemTextJson) | `JsonConverter` implementations + `PooledTypesJsonConverterFactory` (one registration covers `PooledArray<T>`, `PooledList<T>`, `PooledHashMap<K,V>`, `PooledHashSet<T>` for any algorithm) |
-| [`Prest.Serializers.VYaml`](./src/Prest.Serializers.VYaml) | `IYamlFormatter` implementations for the same four types + `PooledTypeFormatterResolver` |
-| [`Prest.Immutable`](./src/Prest.Immutable) | `PooledArray<T>` ↔ `ImmutableArray<T>` conversion extensions |
+| Package | Version | Source | Purpose |
+|---|---|---|---|
+| [`Prest`](https://www.nuget.org/packages/Prest) | [![NuGet](https://img.shields.io/nuget/v/Prest.svg)](https://www.nuget.org/packages/Prest) | [`src/Prest`](./src/Prest) | Core — `PooledHashMap<K,V>`, `PooledHashSet<T>`, algorithm/finalizer/hasher structs, `PooledArray<T>`, `PooledList<T>`, `PooledBufferWriter<T>` |
+| [`Prest.ObjectPool`](https://www.nuget.org/packages/Prest.ObjectPool) | [![NuGet](https://img.shields.io/nuget/v/Prest.ObjectPool.svg)](https://www.nuget.org/packages/Prest.ObjectPool) | [`src/Prest.ObjectPool`](./src/Prest.ObjectPool) | `DefaultObjectPool`-backed `PooledHashMapPool<K,V>`, `PooledHashSetPool<T>`, `PooledBufferWriterPool<T>` for `await`-safe rent/return |
+| [`Prest.SystemTextJson`](https://www.nuget.org/packages/Prest.SystemTextJson) | [![NuGet](https://img.shields.io/nuget/v/Prest.SystemTextJson.svg)](https://www.nuget.org/packages/Prest.SystemTextJson) | [`src/Prest.SystemTextJson`](./src/Prest.SystemTextJson) | `PooledJsonBufferWriter` (pairs `Utf8JsonWriter` with `PooledBufferWriter<byte>`) + threadstatic cache |
+| [`Prest.SystemTextJson.ObjectPool`](https://www.nuget.org/packages/Prest.SystemTextJson.ObjectPool) | [![NuGet](https://img.shields.io/nuget/v/Prest.SystemTextJson.ObjectPool.svg)](https://www.nuget.org/packages/Prest.SystemTextJson.ObjectPool) | [`src/Prest.SystemTextJson.ObjectPool`](./src/Prest.SystemTextJson.ObjectPool) | `DefaultObjectPool`-backed accessor for `PooledJsonBufferWriter` |
+| [`Prest.Serializers.SystemTextJson`](https://www.nuget.org/packages/Prest.Serializers.SystemTextJson) | [![NuGet](https://img.shields.io/nuget/v/Prest.Serializers.SystemTextJson.svg)](https://www.nuget.org/packages/Prest.Serializers.SystemTextJson) | [`src/Prest.Serializers.SystemTextJson`](./src/Prest.Serializers.SystemTextJson) | `JsonConverter` implementations + `PooledTypesJsonConverterFactory` (one registration covers `PooledArray<T>`, `PooledList<T>`, `PooledHashMap<K,V>`, `PooledHashSet<T>` for any algorithm) |
+| [`Prest.Serializers.VYaml`](https://www.nuget.org/packages/Prest.Serializers.VYaml) | [![NuGet](https://img.shields.io/nuget/v/Prest.Serializers.VYaml.svg)](https://www.nuget.org/packages/Prest.Serializers.VYaml) | [`src/Prest.Serializers.VYaml`](./src/Prest.Serializers.VYaml) | `IYamlFormatter` implementations for the same four types + `PooledTypeFormatterResolver` |
+| [`Prest.Immutable`](https://www.nuget.org/packages/Prest.Immutable) | [![NuGet](https://img.shields.io/nuget/v/Prest.Immutable.svg)](https://www.nuget.org/packages/Prest.Immutable) | [`src/Prest.Immutable`](./src/Prest.Immutable) | `PooledArray<T>` ↔ `ImmutableArray<T>` conversion extensions |
 
 ## Install
+
+Core package — pooled collections, `PooledHashMap`, `PooledHashSet`:
 
 ```bash
 dotnet add package Prest
 ```
+
+Optional packages, install only what you need:
+
+```bash
+# Await-safe object pools (PooledHashMapPool, PooledHashSetPool, PooledBufferWriterPool)
+dotnet add package Prest.ObjectPool
+
+# System.Text.Json integration — PooledJsonBufferWriter
+dotnet add package Prest.SystemTextJson
+dotnet add package Prest.SystemTextJson.ObjectPool   # + await-safe accessor
+
+# JsonConverter / IYamlFormatter for pooled collection types
+dotnet add package Prest.Serializers.SystemTextJson
+dotnet add package Prest.Serializers.VYaml
+
+# ImmutableArray<T> ↔ PooledArray<T> interop (net10.0-only)
+dotnet add package Prest.Immutable
+```
+
+All packages target **`net10.0`, `net8.0`, `netstandard2.1`, `netstandard2.0`** (except `Prest.Serializers.SystemTextJson` which is `net8.0+` and `Prest.Immutable` which is `net10.0`-only). See [**Target frameworks**](#target-frameworks) for the full matrix.
 
 ## Quick start
 
