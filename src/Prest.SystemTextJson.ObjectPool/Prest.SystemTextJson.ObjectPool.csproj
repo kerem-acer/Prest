@@ -3,9 +3,14 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
     <RootNamespace>Prest.SystemTextJson.ObjectPool</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
     <PackageId>Prest.SystemTextJson.ObjectPool</PackageId>
-    <Description>Microsoft.Extensions.ObjectPool-based accessor for PooledJsonBufferWriter. Use when pooling must survive await boundaries.</Description>
-    <PackageTags>pool;json;systemtextjson;objectpool</PackageTags>
+    <Title>Prest — await-safe PooledJsonBufferWriter</Title>
+    <Description>Microsoft.Extensions.ObjectPool-backed accessor for PooledJsonBufferWriter. Use when the writer must survive an await boundary — the threadstatic cache in Prest.SystemTextJson is bound to a single thread.</Description>
+    <PackageTags>pool;json;systemtextjson;objectpool;await;utf8jsonwriter;prest</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

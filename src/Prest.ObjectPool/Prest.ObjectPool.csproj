@@ -3,9 +3,14 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
     <RootNamespace>Prest.ObjectPool</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
     <PackageId>Prest.ObjectPool</PackageId>
-    <Description>Microsoft.Extensions.ObjectPool-based accessor for Prest's PooledBufferWriter. Use when pooling must survive await boundaries.</Description>
-    <PackageTags>pool;bufferwriter;objectpool</PackageTags>
+    <Title>Prest — await-safe object pools</Title>
+    <Description>Microsoft.Extensions.ObjectPool-backed rent/return accessors for Prest's PooledHashMap, PooledHashSet, and PooledBufferWriter. Use when pooling must survive await boundaries — unlike the core's threadstatic cache, these are concurrent-safe and keep instances alive across continuations.</Description>
+    <PackageTags>pool;objectpool;await;concurrent;hashmap;hashset;bufferwriter;prest</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

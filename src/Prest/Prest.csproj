@@ -3,9 +3,14 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
     <RootNamespace>Prest</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
     <PackageId>Prest</PackageId>
-    <Description>Pooled collections and IBufferWriter&lt;byte&gt; types backed by ArrayPool&lt;T&gt;.Shared. Single-consumer ownership, value-type-first.</Description>
-    <PackageTags>pool;arraypool;buffer;bufferwriter;memory;performance</PackageTags>
+    <Title>Prest — pooled collections for .NET</Title>
+    <Description>Zero-allocation pooled collections for .NET. PooledHashMap and PooledHashSet with pluggable SwissTable / Robin Hood / Linear / Chained algorithms (chosen at the type-parameter level, monomorphized by the JIT — no virtual dispatch). Also ships PooledArray&lt;T&gt;, PooledList&lt;T&gt;, and PooledBufferWriter&lt;T&gt;. All collections rent arrays from ArrayPool&lt;T&gt;.Shared and auto-return on Dispose.</Description>
+    <PackageTags>pool;arraypool;hashmap;hashset;swisstable;robinhood;bufferwriter;zero-allocation;performance</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

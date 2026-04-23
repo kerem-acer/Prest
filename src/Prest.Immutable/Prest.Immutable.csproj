@@ -1,13 +1,20 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Prest.Immutable</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Prest.Immutable</PackageId>
+    <Title>Prest — ImmutableArray interop</Title>
+    <Description>ImmutableArray&lt;T&gt; ↔ PooledArray&lt;T&gt; conversion extensions for Prest. Round-trip between the BCL's immutable collection type and Prest's pooled backing. net10.0-only (uses C# extension members).</Description>
+    <PackageTags>pool;immutable;immutablearray;interop;prest</PackageTags>
+  </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Prest\Prest.csproj" />
   </ItemGroup>
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
 
 </Project>

@@ -3,10 +3,15 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
     <RootNamespace>Prest.Serializers.VYaml</RootNamespace>
-    <PackageId>Prest.Serializers.VYaml</PackageId>
-    <Description>VYaml formatters for Prest pooled collection types (PooledArray, PooledHashMap).</Description>
-    <PackageTags>pool;yaml;vyaml;formatter</PackageTags>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Prest.Serializers.VYaml</PackageId>
+    <Title>Prest — VYaml formatters</Title>
+    <Description>VYaml formatters for Prest's pooled collection types: PooledArray&lt;T&gt;, PooledList&lt;T&gt;, PooledHashMap, and PooledHashSet. Includes PooledTypeFormatterResolver — a single resolver registration covers every closed generic for any algorithm.</Description>
+    <PackageTags>pool;yaml;vyaml;formatter;serialization;hashmap;hashset;prest</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

@@ -3,9 +3,14 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0;net8.0;netstandard2.1;netstandard2.0</TargetFrameworks>
     <RootNamespace>Prest.SystemTextJson</RootNamespace>
+  </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
     <PackageId>Prest.SystemTextJson</PackageId>
-    <Description>PooledJsonBufferWriter: Utf8JsonWriter paired with a PooledBufferWriter. Includes a threadstatic instance cache.</Description>
-    <PackageTags>pool;json;utf8jsonwriter;systemtextjson</PackageTags>
+    <Title>Prest — pooled Utf8JsonWriter</Title>
+    <Description>PooledJsonBufferWriter: pairs System.Text.Json's Utf8JsonWriter with Prest's PooledBufferWriter&lt;byte&gt; so the backing buffer comes from ArrayPool.Shared. Includes a threadstatic instance cache.</Description>
+    <PackageTags>pool;json;utf8jsonwriter;systemtextjson;bufferwriter;prest</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
