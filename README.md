@@ -21,7 +21,7 @@ Zero-allocation pooled collections for .NET with pluggable, zero-cost hash-table
 
 | Package | Version | Source | Purpose |
 |---|---|---|---|
-| [`Prest`](https://www.nuget.org/packages/Prest) | [![NuGet](https://img.shields.io/nuget/v/Prest.svg)](https://www.nuget.org/packages/Prest) | [`src/Prest`](./src/Prest) | Core — `PooledHashMap<K,V>`, `PooledHashSet<T>`, algorithm/finalizer/hasher structs, `PooledArray<T>`, `PooledList<T>`, `PooledBufferWriter<T>` |
+| [`Prest`](https://www.nuget.org/packages/Prest) | [![NuGet](https://img.shields.io/nuget/v/Prest.svg)](https://www.nuget.org/packages/Prest) | [`src/Prest`](./src/Prest) | Core — `PooledHashMap<K,V>`, `PooledHashSet<T>`, algorithm/finalizer/hasher structs, `PooledArray<T>`, `PooledList<T>`, `PooledStack<T>`, `PooledBufferWriter<T>` |
 | [`Prest.ObjectPool`](https://www.nuget.org/packages/Prest.ObjectPool) | [![NuGet](https://img.shields.io/nuget/v/Prest.ObjectPool.svg)](https://www.nuget.org/packages/Prest.ObjectPool) | [`src/Prest.ObjectPool`](./src/Prest.ObjectPool) | `DefaultObjectPool`-backed `PooledHashMapPool<K,V>`, `PooledHashSetPool<T>`, `PooledBufferWriterPool<T>` for `await`-safe rent/return |
 | [`Prest.SystemTextJson`](https://www.nuget.org/packages/Prest.SystemTextJson) | [![NuGet](https://img.shields.io/nuget/v/Prest.SystemTextJson.svg)](https://www.nuget.org/packages/Prest.SystemTextJson) | [`src/Prest.SystemTextJson`](./src/Prest.SystemTextJson) | `PooledJsonBufferWriter` (pairs `Utf8JsonWriter` with `PooledBufferWriter<byte>`) + threadstatic cache |
 | [`Prest.SystemTextJson.ObjectPool`](https://www.nuget.org/packages/Prest.SystemTextJson.ObjectPool) | [![NuGet](https://img.shields.io/nuget/v/Prest.SystemTextJson.ObjectPool.svg)](https://www.nuget.org/packages/Prest.SystemTextJson.ObjectPool) | [`src/Prest.SystemTextJson.ObjectPool`](./src/Prest.SystemTextJson.ObjectPool) | `DefaultObjectPool`-backed accessor for `PooledJsonBufferWriter` |
@@ -165,6 +165,29 @@ value.Add(7);
 Span<int> inline = stackalloc int[8];
 using var stack = new StackOnlyPooledList<int>(inline);
 stack.Add(99);
+```
+
+### Pooled stacks
+
+`PooledStack<T>` (class) and `StackOnlyPooledStack<T>` (ref struct) mirror `Stack<T>`: `Push`, `Pop` / `TryPop`, `Peek` / `TryPeek`. `foreach` walks top to bottom — the order `Pop` returns — while `.Span` exposes elements in push order (bottom at index 0).
+
+```csharp
+// Iterative depth-first walk. The inline buffer covers typical depths,
+// so the stack never touches the pool or the heap.
+using var pending = new StackOnlyPooledStack<int>(stackalloc int[32]);
+pending.Push(rootIndex);
+while (pending.TryPop(out var index))
+{
+    Visit(index);
+    foreach (var child in children[index])
+    {
+        pending.Push(child);
+    }
+}
+
+// Heap-allocated variant — can live in a field or cross an await.
+using var undo = new PooledStack<EditCommand>();
+undo.Push(command);
 ```
 
 ### `IBufferWriter<T>`
@@ -321,6 +344,7 @@ dotnet run --project examples/Prest.Examples -c Release
 - `PooledHashMapStringBenchmarks.cs` — same comparisons on `string`-keyed maps.
 - `AlgorithmComparisonBenchmarks.cs` — the four algorithms head-to-head.
 - `FinalizerComparisonBenchmarks.cs` — `NoOp` / `Fibonacci` / `Lowbias32` / `XMX` on Swiss and RobinHood with sequential-int keys.
+- `PooledStackBenchmarks.cs` — `PooledStack<int>` and `StackOnlyPooledStack<int>` vs `Stack<int>`: push N then pop N, on a fresh stack per call and on a reused one, at N ∈ {16, 256, 4096}.
 
 Latest results are committed under [`benchmarks/artifacts/results/`](./benchmarks/artifacts/results) (`-report-github.md` files render directly on GitHub).
 
