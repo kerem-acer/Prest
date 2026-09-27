@@ -14,6 +14,8 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
+          # SDK from global.json (.NET 11) plus the .NET 10 runtime for the net10.0 test legs.
+          dotnet-version: 10.0.x
           global-json-file: global.json
           cache: true
           cache-dependency-path: "**/packages.lock.json"

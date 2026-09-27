@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace Prest.Serializers.SystemTextJson;
 
@@ -24,9 +23,9 @@ public sealed class PooledHashMapConverter<TKey, TValue, TAlgo> : JsonConverter<
             throw new JsonException($"Expected StartObject, got {reader.TokenType}");
         }
 
-        var keyTypeInfo = (JsonTypeInfo<TKey>)options.GetTypeInfo(typeof(TKey));
+        var keyTypeInfo = options.GetTypedTypeInfo<TKey>();
         var keyConverter = (JsonConverter<TKey>)keyTypeInfo.Converter;
-        var valueTypeInfo = (JsonTypeInfo<TValue>)options.GetTypeInfo(typeof(TValue));
+        var valueTypeInfo = options.GetTypedTypeInfo<TValue>();
 
         // PooledList always rents from ArrayPool — we need a rented array to hand off
         // to PooledHashMap's (rentedKeys, rentedValues, count) ctor.
@@ -68,7 +67,7 @@ public sealed class PooledHashMapConverter<TKey, TValue, TAlgo> : JsonConverter<
         JsonSerializerOptions options)
     {
         writer.WriteStartObject();
-        var valueTypeInfo = (JsonTypeInfo<TValue>)options.GetTypeInfo(typeof(TValue));
+        var valueTypeInfo = options.GetTypedTypeInfo<TValue>();
         foreach (var kv in value)
         {
             WriteKey(writer, kv.Key);
