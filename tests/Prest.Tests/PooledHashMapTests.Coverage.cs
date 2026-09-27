@@ -13,7 +13,9 @@ public partial class PooledHashMapTests
     [Test]
     public async Task Capacity_ReflectsAlgorithmCapacity()
     {
-        // Arrange
+        // Arrange — consume the cache slot without returning, so Create(64) allocates a fresh
+        // map instead of reusing whatever another test on this thread left in the cache.
+        _ = PooledHashMap<int, int>.Create(0);
         using var map = PooledHashMap<int, int>.Create(capacity: 64);
 
         // Act

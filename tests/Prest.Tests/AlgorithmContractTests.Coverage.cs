@@ -28,7 +28,9 @@ public partial class AlgorithmContractTests
     [Test]
     public async Task Swiss_Capacity_MatchesConfiguredLoadFactor()
     {
-        // Arrange — SwissTable uses 7/8 load factor at ≥GroupWidth buckets.
+        // Arrange — SwissTable uses 7/8 load factor at ≥GroupWidth buckets. Consume the cache
+        // slot first so Create(16) allocates fresh rather than reusing a cached map.
+        _ = PooledHashMap<int, int>.Create(0);
         using var map = PooledHashMap<int, int>.Create(16);
 
         // Act
@@ -183,7 +185,8 @@ public partial class AlgorithmContractTests
     [Test]
     public async Task RobinHood_Capacity_Nonzero()
     {
-        // Arrange
+        // Arrange — consume the cache slot so Create(32) allocates fresh rather than reusing a cached map.
+        _ = RobinHoodHashMap<int, int>.Create(0);
         using var map = RobinHoodHashMap<int, int>.Create(32);
 
         // Act

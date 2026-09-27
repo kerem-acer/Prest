@@ -9,8 +9,8 @@
   <PropertyGroup>
     <PackageId>Prest</PackageId>
     <Title>Prest — pooled collections for .NET</Title>
-    <Description>Zero-allocation pooled collections for .NET. PooledHashMap and PooledHashSet with pluggable SwissTable / Robin Hood / Linear / Chained algorithms (chosen at the type-parameter level, monomorphized by the JIT — no virtual dispatch). Also ships PooledArray&lt;T&gt;, PooledList&lt;T&gt;, and PooledBufferWriter&lt;T&gt;. All collections rent arrays from ArrayPool&lt;T&gt;.Shared and auto-return on Dispose.</Description>
-    <PackageTags>pool;arraypool;hashmap;hashset;swisstable;robinhood;bufferwriter;zero-allocation;performance</PackageTags>
+    <Description>Zero-allocation pooled collections for .NET. PooledHashMap and PooledHashSet with pluggable SwissTable / Robin Hood / Linear / Chained algorithms (chosen at the type-parameter level, monomorphized by the JIT — no virtual dispatch). Also ships PooledArray&lt;T&gt;, PooledList&lt;T&gt;, PooledStack&lt;T&gt;, and PooledBufferWriter&lt;T&gt;. All collections rent arrays from ArrayPool&lt;T&gt;.Shared and auto-return on Dispose.</Description>
+    <PackageTags>pool;arraypool;hashmap;hashset;stack;swisstable;robinhood;bufferwriter;zero-allocation;performance</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
