@@ -22,11 +22,11 @@
       },
       "Faster.Map": {
         "type": "Direct",
-        "requested": "[8.1.1, )",
-        "resolved": "8.1.1",
-        "contentHash": "x20BLFApZ/vzpmQsvsUC9PpDPqZp0s+pHsRdzFjlikGUPksMuGv8tPcnzlxHHy4Tbey46vjoe/P6LV65JFryQA==",
+        "requested": "[9.0.3, )",
+        "resolved": "9.0.3",
+        "contentHash": "85lKZmQBUflgdoIHr15GnEngGAMj9vZhCxS9e0X4AVrUCBFFS+rhlqQgFLZGPj214tpBmpz2tt2W2+9ivUx7oQ==",
         "dependencies": {
-          "System.IO.Hashing": "10.0.3"
+          "System.IO.Hashing": "10.0.10"
         }
       },
       "BenchmarkDotNet.Annotations": {
@@ -164,8 +164,8 @@
       },
       "System.IO.Hashing": {
         "type": "Transitive",
-        "resolved": "10.0.3",
-        "contentHash": "La6ICwsdTKhVX+LKN+pvFjQRR3LhLwq3uKdi2knjLzRyPYBSydF4cjXidYxIiTcDD6XVYdsBWQEI8ZxiZ/OdIg=="
+        "resolved": "10.0.10",
+        "contentHash": "eE839zyWZD/UBZYzP2lu9fhHX6RWe63/jz3Jxf+JumzO/db+Vc2s7CMiDwxk9ti2NTUft2tdRx31Rw2OjKbecA=="
       },
       "System.Management": {
         "type": "Transitive",
@@ -186,28 +186,28 @@
       "prest.objectpool": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.ObjectPool": "[10.0.6, )",
-          "Prest": "[0.1.0, )"
+          "Microsoft.Extensions.ObjectPool": "[10.0.12, )",
+          "Prest": "[0.1.1, )"
         }
       },
       "prest.systemtextjson": {
         "type": "Project",
         "dependencies": {
-          "Prest": "[0.1.0, )"
+          "Prest": "[0.1.1, )"
         }
       },
       "prest.systemtextjson.objectpool": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.ObjectPool": "[10.0.6, )",
-          "Prest.SystemTextJson": "[0.1.0, )"
+          "Microsoft.Extensions.ObjectPool": "[10.0.12, )",
+          "Prest.SystemTextJson": "[0.1.1, )"
         }
       },
       "Microsoft.Extensions.ObjectPool": {
         "type": "CentralTransitive",
-        "requested": "[10.0.6, )",
-        "resolved": "10.0.6",
-        "contentHash": "2Jafd4fdxxiwiQ08mcF+Lf3vqikkQZusGVThOKZNSmPDceGk4IwkjeHL7OEb9Ov8q9ICY5wofL98CS153K5VvQ=="
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "opBULzn9F7ZOL8EoFuqM2QjI6x9AG04DFNdnU2ky/kI4aUzbiXEfuy9jvCuu3D/ieccuDHTlalyC62esPD8wGg=="
       }
     }
   }

@@ -6,20 +6,13 @@ namespace System.Numerics;
 // Polyfill for System.Numerics.BitOperations on netstandard2.0 / netstandard2.1.
 //
 // On net6+ this file compiles to nothing — the BCL's BitOperations is used.
-// On older TFMs we declare a stub type so `BitOperations.XXX(...)` resolves,
-// and add the missing members via the C# 14 extension-member syntax.
+// On older TFMs the Polyfill package supplies an internal BitOperations stub
+// (IsPow2 only); we add the missing members via the C# 14 extension-member syntax.
 // ---------------------------------------------------------------------------
-
-/// <summary>Polyfill stub for <c>System.Numerics.BitOperations</c>. Members are
-/// added via extension declarations below; keeping the stub minimal keeps this
-/// file's diff against the BCL trivial.</summary>
-public static class BitOperations
-{
-}
 
 /// <summary>C# 14 extension members adding missing <see cref="BitOperations" />
 /// methods for pre-net6 TFMs.</summary>
-public static class BitOperationsPolyfill
+static class BitOperationsPolyfill
 {
     extension(BitOperations)
     {

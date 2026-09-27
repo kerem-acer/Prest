@@ -38,8 +38,10 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('Benchmarks'))">
-    <!-- BenchmarkDotNet needs public mutable fields for [Params]; method names use underscores by convention. -->
-    <NoWarn>$(NoWarn);CA1001;CA1707;CA1051;CA1822</NoWarn>
+    <!-- BenchmarkDotNet needs public mutable fields for [Params]; method names use underscores by convention.
+         IDE0028: newer SDKs suggest preview `[with(N)]` collection-expression arguments, which the
+         global.json baseline SDK cannot compile; matches the test-project suppression. -->
+    <NoWarn>$(NoWarn);CA1001;CA1707;CA1051;CA1822;IDE0028</NoWarn>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
