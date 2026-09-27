@@ -51,11 +51,11 @@ dotnet add package Prest.SystemTextJson.ObjectPool   # + await-safe accessor
 dotnet add package Prest.Serializers.SystemTextJson
 dotnet add package Prest.Serializers.VYaml
 
-# ImmutableArray<T> ↔ PooledArray<T> interop (net10.0-only)
+# ImmutableArray<T> ↔ PooledArray<T> interop (net10.0+)
 dotnet add package Prest.Immutable
 ```
 
-All packages target **`net10.0`, `net8.0`, `netstandard2.1`, `netstandard2.0`** (except `Prest.Serializers.SystemTextJson` which is `net8.0+` and `Prest.Immutable` which is `net10.0`-only). See [**Target frameworks**](#target-frameworks) for the full matrix.
+All packages target **`net11.0`, `net10.0`, `net8.0`, `netstandard2.1`, `netstandard2.0`** (except `Prest.Serializers.SystemTextJson` which is `net8.0+` and `Prest.Immutable` which is `net10.0+`). See [**Target frameworks**](#target-frameworks) for the full matrix.
 
 ## Quick start
 
@@ -376,17 +376,17 @@ The same applies to VYaml: instead of adding `PooledTypeFormatterResolver.Instan
 
 ## Target frameworks
 
-| Package | net10.0 | net8.0 | netstandard2.1 | netstandard2.0 |
-|---|:-:|:-:|:-:|:-:|
-| `Prest` | ✓ | ✓ | ✓ | ✓ |
-| `Prest.ObjectPool` | ✓ | ✓ | ✓ | ✓ |
-| `Prest.SystemTextJson` | ✓ | ✓ | ✓ | ✓ |
-| `Prest.SystemTextJson.ObjectPool` | ✓ | ✓ | ✓ | ✓ |
-| `Prest.Serializers.SystemTextJson` | ✓ | ✓ | — | — |
-| `Prest.Serializers.VYaml` | ✓ | ✓ | ✓ | ✓ |
-| `Prest.Immutable` | ✓ | — | — | — |
+| Package | net11.0 | net10.0 | net8.0 | netstandard2.1 | netstandard2.0 |
+|---|:-:|:-:|:-:|:-:|:-:|
+| `Prest` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `Prest.ObjectPool` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `Prest.SystemTextJson` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `Prest.SystemTextJson.ObjectPool` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `Prest.Serializers.SystemTextJson` | ✓ | ✓ | ✓ | — | — |
+| `Prest.Serializers.VYaml` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `Prest.Immutable` | ✓ | ✓ | — | — | — |
 
-`Prest.Serializers.SystemTextJson` requires `net8.0+` for `IUtf8SpanFormattable`. `Prest.Immutable` is `net10.0`-only (uses C# extension members).
+`Prest.Serializers.SystemTextJson` requires `net8.0+` for `IUtf8SpanFormattable`. `Prest.Immutable` requires `net10.0+` (uses C# extension members).
 
 ## License
 

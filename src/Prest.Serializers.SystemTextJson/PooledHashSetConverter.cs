@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace Prest.Serializers.SystemTextJson;
 
@@ -21,7 +20,7 @@ public sealed class PooledHashSetConverter<T, TAlgo> : JsonConverter<PooledHashS
             throw new JsonException($"Expected StartArray, got {reader.TokenType}");
         }
 
-        var elementTypeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var elementTypeInfo = options.GetTypedTypeInfo<T>();
         var set = PooledHashSet<T, TAlgo>.Create(0);
         try
         {
@@ -42,7 +41,7 @@ public sealed class PooledHashSetConverter<T, TAlgo> : JsonConverter<PooledHashS
         Utf8JsonWriter writer, PooledHashSet<T, TAlgo> value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        var elementTypeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var elementTypeInfo = options.GetTypedTypeInfo<T>();
         foreach (var item in value)
         {
             JsonSerializer.Serialize(writer, item, elementTypeInfo);

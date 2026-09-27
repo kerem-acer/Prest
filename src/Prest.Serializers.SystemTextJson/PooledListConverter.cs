@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace Prest.Serializers.SystemTextJson;
 
@@ -18,7 +17,7 @@ public sealed class PooledListConverter<T> : JsonConverter<PooledList<T>>
             throw new JsonException($"Expected StartArray, got {reader.TokenType}");
         }
 
-        var elementTypeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var elementTypeInfo = options.GetTypedTypeInfo<T>();
         var list = new PooledList<T>();
         try
         {
@@ -38,7 +37,7 @@ public sealed class PooledListConverter<T> : JsonConverter<PooledList<T>>
     public override void Write(Utf8JsonWriter writer, PooledList<T> value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        var elementTypeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var elementTypeInfo = options.GetTypedTypeInfo<T>();
         var span = value.Span;
         foreach (var t in span)
         {

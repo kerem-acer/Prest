@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 
 namespace Prest.Serializers.SystemTextJson;
 
@@ -28,7 +27,7 @@ public sealed class PooledArrayConverter<T> : JsonConverter<PooledArray<T>>
             throw new JsonException($"Expected StartArray, got {reader.TokenType}");
         }
 
-        var elementTypeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var elementTypeInfo = options.GetTypedTypeInfo<T>();
 #if NET
         InlineBuffer buffer = default;
         using var list = new StackOnlyPooledList<T>(buffer);
@@ -46,7 +45,7 @@ public sealed class PooledArrayConverter<T> : JsonConverter<PooledArray<T>>
     public override void Write(Utf8JsonWriter writer, PooledArray<T> value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
-        var elementTypeInfo = (JsonTypeInfo<T>)options.GetTypeInfo(typeof(T));
+        var elementTypeInfo = options.GetTypedTypeInfo<T>();
         var span = value.Span;
         foreach (var t in span)
         {
