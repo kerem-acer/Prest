@@ -13,6 +13,8 @@ BenchmarkDotNet.Artifacts/
 benchmarks/artifacts/*
 !benchmarks/artifacts/results/
 *.nupkg
+*.snupkg
+/artifacts/
 
 # Verify
 *.received.*
