@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
@@ -13,12 +14,21 @@ namespace Prest;
 /// for ergonomic construction.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The algorithm is a compile-time generic parameter — the JIT monomorphizes
 /// each closed generic with hash, equality, probe, and enumeration logic fully
 /// inlined. Zero interface-dispatch cost.
+/// </para>
+/// <para>
+/// Implements <see cref="IReadOnlyCollection{T}" /> so it can be handed to APIs and LINQ.
+/// <c>foreach</c> over the set still binds to the value-type <see cref="Enumerator" /> and
+/// does not allocate; enumerating through the interface boxes it. Enumerators do not
+/// detect modification: do not add or remove items while enumerating — a grow returns
+/// the old buffers to the pool.
+/// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}")]
-public class PooledHashSet<T, TAlgo> : IDisposable
+public class PooledHashSet<T, TAlgo> : IReadOnlyCollection<T>, IDisposable
     where T : notnull
     where TAlgo : struct, IHashAlgorithm<T, T>
 {
@@ -140,6 +150,10 @@ public class PooledHashSet<T, TAlgo> : IDisposable
     /// <summary>Returns an enumerator over the items. Traversal order is arbitrary.</summary>
     public Enumerator GetEnumerator() => new(_algo);
 
+    IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
     /// <summary>Copies the items into a freshly-allocated array.</summary>
     public T[] ToArray()
     {
@@ -174,8 +188,9 @@ public class PooledHashSet<T, TAlgo> : IDisposable
     /// <summary>Dense-scan enumerator over full slots. Holds a value-copy of the
     /// algorithm struct (cheap — the struct is ~40 bytes of array refs and ints)
     /// so MoveNext calls <c>_algo.IsSlotLive</c> directly, which the JIT
-    /// monomorphizes per closed TAlgo.</summary>
-    public struct Enumerator
+    /// monomorphizes per closed TAlgo. Implements <see cref="IEnumerator{T}" /> for interface
+    /// consumers; it is only boxed when the set is enumerated through an interface.</summary>
+    public struct Enumerator : IEnumerator<T>
     {
         TAlgo _algo;
         int _index;
@@ -191,6 +206,16 @@ public class PooledHashSet<T, TAlgo> : IDisposable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => ref _algo.SlotArray![_index];
+        }
+
+        readonly T IEnumerator<T>.Current => Current;
+
+        readonly object IEnumerator.Current => Current;
+
+        void IEnumerator.Reset() => _index = -1;
+
+        readonly void IDisposable.Dispose()
+        {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

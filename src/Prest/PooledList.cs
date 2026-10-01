@@ -25,7 +25,8 @@ namespace Prest;
 /// Implements <see cref="IReadOnlyList{T}" /> so it can be handed to APIs and LINQ.
 /// <c>foreach</c> over a <see cref="PooledList{T}" /> still binds to the value-type
 /// <see cref="Enumerator" /> and does not allocate; enumerating through the interface
-/// boxes the enumerator, as with <see cref="List{T}" />.
+/// boxes the enumerator, as with <see cref="List{T}" />. Unlike <see cref="List{T}" />,
+/// enumerators do not detect modification.
 /// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}, Capacity = {Capacity}")]

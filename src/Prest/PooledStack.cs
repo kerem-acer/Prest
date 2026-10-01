@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -14,11 +15,19 @@ namespace Prest;
 /// across <c>await</c> boundaries.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Use <c>using var stack = new PooledStack&lt;T&gt;(8);</c> for automatic return.
 /// For zero-allocation hot paths, prefer <see cref="StackOnlyPooledStack{T}" /> (ref struct).
+/// </para>
+/// <para>
+/// Implements <see cref="IReadOnlyCollection{T}" /> (top to bottom, like <see cref="Stack{T}" />)
+/// so it can be handed to APIs and LINQ. <c>foreach</c> over the stack still binds to the
+/// value-type <see cref="Enumerator" /> and does not allocate; enumerating through the
+/// interface boxes it. Enumerators do not detect modification.
+/// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}, Capacity = {Capacity}")]
-public sealed class PooledStack<T> : IDisposable
+public sealed class PooledStack<T> : IReadOnlyCollection<T>, IDisposable
 {
     T[] _rented;
     int _count;
@@ -209,6 +218,10 @@ public sealed class PooledStack<T> : IDisposable
     /// </summary>
     public Enumerator GetEnumerator() => new(_rented, _count);
 
+    IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     [DoesNotReturn]
     static void ThrowEmpty() =>
@@ -228,16 +241,22 @@ public sealed class PooledStack<T> : IDisposable
         _rented = newArray;
     }
 
-    /// <summary>Value-type enumerator for <see cref="PooledStack{T}" />, top to bottom.</summary>
-    public struct Enumerator
+    /// <summary>
+    /// Value-type enumerator for <see cref="PooledStack{T}" />, top to bottom. Implements
+    /// <see cref="IEnumerator{T}" /> for interface consumers; it is only boxed when the stack
+    /// is enumerated through an interface.
+    /// </summary>
+    public struct Enumerator : IEnumerator<T>
     {
         readonly T[] _rented;
+        readonly int _count;
         int _index;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal Enumerator(T[] rented, int count)
         {
             _rented = rented;
+            _count = count;
             _index = count;
         }
 
@@ -255,5 +274,17 @@ public sealed class PooledStack<T> : IDisposable
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext() => --_index >= 0;
+
+        // Interface access goes through the bounds-checked array indexer: unlike the
+        // compiler's foreach pattern, interface callers can read Current out of sequence.
+        readonly T IEnumerator<T>.Current => _rented[_index];
+
+        readonly object? IEnumerator.Current => _rented[_index];
+
+        void IEnumerator.Reset() => _index = _count;
+
+        readonly void IDisposable.Dispose()
+        {
+        }
     }
 }
