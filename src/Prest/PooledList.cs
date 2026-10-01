@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -14,13 +15,21 @@ namespace Prest;
 /// <c>await</c> boundaries.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Use <c>using var list = new PooledList&lt;T&gt;(8);</c> for automatic return.
 /// For zero-allocation hot paths, prefer
 /// <see cref="StackOnlyPooledList{T}" /> (ref struct) or
 /// <see cref="ValuePooledList{T}" /> (struct).
+/// </para>
+/// <para>
+/// Implements <see cref="IReadOnlyList{T}" /> so it can be handed to APIs and LINQ.
+/// <c>foreach</c> over a <see cref="PooledList{T}" /> still binds to the value-type
+/// <see cref="Enumerator" /> and does not allocate; enumerating through the interface
+/// boxes the enumerator, as with <see cref="List{T}" />.
+/// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}, Capacity = {Capacity}")]
-public sealed class PooledList<T> : IDisposable, IEquatable<PooledList<T>>
+public sealed class PooledList<T> : IReadOnlyList<T>, IDisposable, IEquatable<PooledList<T>>
 {
     T[] _rented;
     int _count;
@@ -107,6 +116,40 @@ public sealed class PooledList<T> : IDisposable, IEquatable<PooledList<T>>
         _count = needed;
     }
 
+    /// <summary>
+    /// Removes the element at <paramref name="index" />, shifting later elements down by one.
+    /// For reference-containing <typeparamref name="T" />, clears the vacated slot so the
+    /// rented array does not keep the removed element alive.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="index" /> is negative or not less than <see cref="Count" />.
+    /// </exception>
+    public void RemoveAt(int index)
+    {
+        var count = _count;
+        if ((uint)index >= (uint)count)
+        {
+            ThrowIndexOutOfRange();
+        }
+
+        var arr = _rented;
+        count--;
+        if (index < count)
+        {
+            Array.Copy(arr, index + 1, arr, index, count - index);
+        }
+        _count = count;
+
+#if NET
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            arr[count] = default!;
+        }
+#else
+        arr[count] = default!;
+#endif
+    }
+
     public ref T this[int index]
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -125,6 +168,8 @@ public sealed class PooledList<T> : IDisposable, IEquatable<PooledList<T>>
 #endif
         }
     }
+
+    T IReadOnlyList<T>.this[int index] => this[index];
 
     /// <summary>
     /// Returns the zero-based index of the first occurrence of <paramref name="item" />,
@@ -237,6 +282,10 @@ public sealed class PooledList<T> : IDisposable, IEquatable<PooledList<T>>
     /// <summary>Returns an enumerator over the valid elements.</summary>
     public Enumerator GetEnumerator() => new(_rented, _count);
 
+    IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
     /// <summary>
     /// Identity equality — two <see cref="PooledList{T}" /> instances are equal iff
     /// they refer to the same object. Matches default reference-type semantics;
@@ -274,8 +323,12 @@ public sealed class PooledList<T> : IDisposable, IEquatable<PooledList<T>>
         _rented = newArray;
     }
 
-    /// <summary>Value-type enumerator for <see cref="PooledList{T}" />.</summary>
-    public struct Enumerator
+    /// <summary>
+    /// Value-type enumerator for <see cref="PooledList{T}" />. Implements
+    /// <see cref="IEnumerator{T}" /> for interface consumers; it is only boxed when the
+    /// list is enumerated through <see cref="IEnumerable{T}" />.
+    /// </summary>
+    public struct Enumerator : IEnumerator<T>
     {
         readonly T[] _rented;
         readonly int _count;
@@ -303,5 +356,17 @@ public sealed class PooledList<T> : IDisposable, IEquatable<PooledList<T>>
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext() => ++_index < _count;
+
+        // Interface access goes through the bounds-checked array indexer: unlike the
+        // compiler's foreach pattern, interface callers can read Current before MoveNext.
+        readonly T IEnumerator<T>.Current => _rented[_index];
+
+        readonly object? IEnumerator.Current => _rented[_index];
+
+        void IEnumerator.Reset() => _index = -1;
+
+        readonly void IDisposable.Dispose()
+        {
+        }
     }
 }

@@ -1,6 +1,6 @@
 namespace Prest.Tests;
 
-public class PooledListTests
+public partial class PooledListTests
 {
     [Test]
     public async Task Add_Grows_ContainsAll()
