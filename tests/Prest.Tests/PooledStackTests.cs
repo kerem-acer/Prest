@@ -3,7 +3,7 @@ using TUnit.Assertions.Enums;
 
 namespace Prest.Tests;
 
-public class PooledStackTests
+public partial class PooledStackTests
 {
     [Test]
     public async Task Push_SingleItem_CountIsOneAndPeekReturnsItem()

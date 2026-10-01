@@ -130,8 +130,10 @@ public partial class PooledHashSetTests
     [Test]
     public async Task Add_PastCapacity_GrowsAndPreservesAllItems()
     {
-        // Arrange
+        // Arrange — consume the cache slot first so Create(cap) allocates fresh rather than
+        // reusing a cached set that another test on this thread already grew.
         const int cap = 12;
+        _ = PooledHashSet<int>.Create(0);
         using var set = PooledHashSet<int>.Create(cap);
         for (var i = 0; i < cap; i++)
         {

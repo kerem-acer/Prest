@@ -1,5 +1,7 @@
 using System.Buffers;
+using System.Collections;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
 #pragma warning disable IDE0044 // Readonly not possible — algorithm methods mutate _algo.
@@ -13,8 +15,15 @@ namespace Prest;
 /// per-algorithm aliases (<c>RobinHoodHashMap</c>, <c>LinearHashMap</c>,
 /// <c>ChainedHashMap</c>) for ergonomic construction.
 /// </summary>
+/// <remarks>
+/// Implements <see cref="IReadOnlyDictionary{TKey,TValue}" /> so it can be handed to APIs
+/// and LINQ. <c>foreach</c> over the map, <see cref="Keys" />, or <see cref="Values" />
+/// still binds to the value-type enumerators and does not allocate; enumerating through
+/// the interfaces boxes them. Enumerators do not detect modification: do not add or
+/// remove entries while enumerating — a grow returns the old buffers to the pool.
+/// </remarks>
 [DebuggerDisplay("Count = {Count}")]
-public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
+public class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TKey, TValue>, IDisposable
     where TKey : notnull
     where TAlgo : struct, IHashAlgorithm<KeyValueSlot<TKey, TValue>, TKey>
 {
@@ -162,17 +171,24 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool TryGetValue(TKey key, out TValue value)
+    public bool TryGetValue(TKey key, [MaybeNullWhen(false)] out TValue value)
     {
         ref readonly var slot = ref _algo.FindSlot<Extractor>(key);
         if (Unsafe.IsNullRef(ref Unsafe.AsRef(in slot)))
         {
-            value = default!;
+            value = default;
             return false;
         }
         value = slot.Value;
         return true;
     }
+
+#if !NET
+    // netstandard's IReadOnlyDictionary<,>.TryGetValue lacks [MaybeNullWhen(false)], so the
+    // annotated public method can't implement it implicitly (CS8767).
+    bool IReadOnlyDictionary<TKey, TValue>.TryGetValue(TKey key, out TValue value) =>
+        TryGetValue(key, out value!);
+#endif
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool ContainsKey(TKey key) => !Unsafe.IsNullRef(ref Unsafe.AsRef(in _algo.FindSlot<Extractor>(key)));
@@ -182,6 +198,14 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
     public void Clear() => _algo.Clear();
 
     public Enumerator GetEnumerator() => new(_algo);
+
+    IEnumerable<TKey> IReadOnlyDictionary<TKey, TValue>.Keys => Keys;
+
+    IEnumerable<TValue> IReadOnlyDictionary<TKey, TValue>.Values => Values;
+
+    IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator() => GetEnumerator();
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     public virtual void Dispose()
     {
@@ -215,7 +239,11 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     void EnsureInitialized() => _algo.Initialize(capacity: 8);
 
-    public struct Enumerator
+    /// <summary>
+    /// Value-type enumerator over the entries. Implements <see cref="IEnumerator{T}" /> for
+    /// interface consumers; it is only boxed when the map is enumerated through an interface.
+    /// </summary>
+    public struct Enumerator : IEnumerator<KeyValuePair<TKey, TValue>>
     {
         TAlgo _algo;
         int _index;
@@ -250,9 +278,18 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
             }
             return false;
         }
+
+        readonly object IEnumerator.Current => Current;
+
+        void IEnumerator.Reset() => _index = -1;
+
+        readonly void IDisposable.Dispose()
+        {
+        }
     }
 
-    public readonly struct KeyCollection
+    /// <summary>Value-type view over the keys. Boxed only when used through an interface.</summary>
+    public readonly struct KeyCollection : IReadOnlyCollection<TKey>
     {
         readonly TAlgo _algo;
 
@@ -262,9 +299,14 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
         public int Count => _algo.Count;
 
         public KeyEnumerator GetEnumerator() => new(_algo);
+
+        IEnumerator<TKey> IEnumerable<TKey>.GetEnumerator() => GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    public readonly struct ValueCollection
+    /// <summary>Value-type view over the values. Boxed only when used through an interface.</summary>
+    public readonly struct ValueCollection : IReadOnlyCollection<TValue>
     {
         readonly TAlgo _algo;
 
@@ -274,9 +316,13 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
         public int Count => _algo.Count;
 
         public ValueEnumerator GetEnumerator() => new(_algo);
+
+        IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator() => GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    public struct KeyEnumerator
+    public struct KeyEnumerator : IEnumerator<TKey>
     {
         TAlgo _algo;
         int _index;
@@ -294,6 +340,16 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
             get => ref _algo.SlotArray![_index].Key;
         }
 
+        readonly TKey IEnumerator<TKey>.Current => Current;
+
+        readonly object IEnumerator.Current => Current;
+
+        void IEnumerator.Reset() => _index = -1;
+
+        readonly void IDisposable.Dispose()
+        {
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool MoveNext()
         {
@@ -309,7 +365,7 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
         }
     }
 
-    public struct ValueEnumerator
+    public struct ValueEnumerator : IEnumerator<TValue>
     {
         TAlgo _algo;
         int _index;
@@ -325,6 +381,16 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IDisposable
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => ref _algo.SlotArray![_index].Value;
+        }
+
+        readonly TValue IEnumerator<TValue>.Current => Current;
+
+        readonly object? IEnumerator.Current => Current;
+
+        void IEnumerator.Reset() => _index = -1;
+
+        readonly void IDisposable.Dispose()
+        {
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

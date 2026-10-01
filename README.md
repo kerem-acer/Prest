@@ -146,6 +146,8 @@ foreach (var key   in map.Keys)      { /* ... */ }
 foreach (var value in map.Values)    { /* ... */ }
 ```
 
+The heap-allocated collections also implement the read-only interfaces, so they can be passed to APIs and LINQ: `PooledHashMap` → `IReadOnlyDictionary<K,V>`, `PooledList<T>` → `IReadOnlyList<T>`, `PooledHashSet` and `PooledStack<T>` → `IReadOnlyCollection<T>`. Enumerating through an interface boxes the enumerator; `foreach` on the concrete type does not. Enumerators don't detect modification — don't add or remove items while enumerating (a hash table grow returns the old buffers to the pool).
+
 ### Pooled arrays and lists
 
 ```csharp
