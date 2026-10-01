@@ -152,9 +152,11 @@ foreach (var value in map.Values)    { /* ... */ }
 // Collection-expression literal over ArrayPool.Shared.
 using PooledArray<int> numbers = [1, 2, 3];
 
-// Growable, heap-allocated wrapper.
+// Growable, heap-allocated wrapper. Implements IReadOnlyList<T>, so it can be handed
+// to APIs and LINQ; foreach still uses the allocation-free struct enumerator.
 using var list = new PooledList<int>(initialCapacity: 16);
 list.Add(42);
+list.RemoveAt(0);
 
 // Struct variant — zero wrapper allocation. Copies share rented buffers; Dispose one.
 using var value = new ValuePooledList<int>(16);

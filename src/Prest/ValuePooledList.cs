@@ -15,11 +15,17 @@ namespace Prest;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Copy hazard:</b> mutating this struct (<see cref="Add" />, <see cref="Dispose" />,
-/// <see cref="ToPooledArray" />) updates fields in the calling copy only. However,
+/// <b>Copy hazard:</b> mutating this struct (<see cref="Add" />, <see cref="RemoveAt" />,
+/// <see cref="Dispose" />, <see cref="ToPooledArray" />) updates fields in the calling copy only. However,
 /// copies share the same rented <c>T[]</c> — writing through one copy is visible to
 /// all, and only one copy should <see cref="Dispose" /> the backing array. Single-consumer
 /// ownership discipline required.
+/// </para>
+/// <para>
+/// Deliberately does not implement <see cref="IReadOnlyList{T}" />: passing it to an
+/// interface parameter would silently box a copy that keeps pointing at the original's
+/// rented array, and that array goes back to the pool when the original grows. Use
+/// <see cref="PooledList{T}" /> when the list must be handed to other APIs.
 /// </para>
 /// <para>
 /// For compiler-enforced stack-only semantics use <see cref="StackOnlyPooledList{T}" />.
@@ -112,6 +118,40 @@ public struct ValuePooledList<T> : IDisposable
 
         items.CopyTo(_rented.AsSpan(_count));
         _count = needed;
+    }
+
+    /// <summary>
+    /// Removes the element at <paramref name="index" />, shifting later elements down by one.
+    /// For reference-containing <typeparamref name="T" />, clears the vacated slot so the
+    /// rented array does not keep the removed element alive.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="index" /> is negative or not less than <see cref="Count" />.
+    /// </exception>
+    public void RemoveAt(int index)
+    {
+        var count = _count;
+        if ((uint)index >= (uint)count)
+        {
+            ThrowIndexOutOfRange();
+        }
+
+        var arr = _rented;
+        count--;
+        if (index < count)
+        {
+            Array.Copy(arr, index + 1, arr, index, count - index);
+        }
+        _count = count;
+
+#if NET
+        if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            arr[count] = default!;
+        }
+#else
+        arr[count] = default!;
+#endif
     }
 
     public readonly ref T this[int index]

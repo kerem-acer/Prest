@@ -1,6 +1,6 @@
 namespace Prest.Tests;
 
-public class ValuePooledListTests
+public partial class ValuePooledListTests
 {
     [Test]
     public async Task Add_Grows_ContainsAll()
