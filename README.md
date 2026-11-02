@@ -171,6 +171,16 @@ using var stack = new StackOnlyPooledList<int>(inline);
 stack.Add(99);
 ```
 
+All three lists expose `.Span` (read-only) and `AsSpan()`, a writable `Span<T>` over `[0, Count)` — the counterpart of `CollectionsMarshal.AsSpan(List<T>)`. Use it for in-place work the list has no method for:
+
+```csharp
+using var words = new PooledList<string>();
+words.AddRange(["banana", "fig", "kiwi"]);
+words.AsSpan().Sort((a, b) => a.Length.CompareTo(b.Length)); // fig, kiwi, banana
+```
+
+Don't hold the span across calls that change the list (`Add`, `AddRange`, `RemoveAt`, `Clear`, `Dispose`, `ToPooledArray`, `DetachArray`) — get a new one afterwards. A grow returns the old array to `ArrayPool<T>.Shared`, and writing through a stale span would corrupt whatever code rented it next.
+
 ### Pooled stacks
 
 `PooledStack<T>` (class) and `StackOnlyPooledStack<T>` (ref struct) mirror `Stack<T>`: `Push`, `Pop` / `TryPop`, `Peek` / `TryPeek`. `foreach` walks top to bottom — the order `Pop` returns — while `.Span` exposes elements in push order (bottom at index 0).

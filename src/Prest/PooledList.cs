@@ -63,6 +63,39 @@ public sealed class PooledList<T> : IReadOnlyList<T>, IDisposable, IEquatable<Po
 #endif
     }
 
+    /// <summary>
+    /// Returns a writable span over the valid elements, <c>[0, Count)</c> — not the spare
+    /// capacity. Branchless — empty when <see cref="Count" /> is zero.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The writable counterpart of <see cref="Span" />, like
+    /// <c>CollectionsMarshal.AsSpan(List&lt;T&gt;)</c>. Writes go straight to the backing
+    /// array, as they already do through the <c>ref</c> indexer and the enumerator's
+    /// <c>ref</c> <see cref="Enumerator.Current" />. Use it for in-place work the list has no
+    /// method for: <c>list.AsSpan().Sort(comparison)</c>, <c>Fill</c>, <c>CopyTo</c>,
+    /// vectorized loops.
+    /// </para>
+    /// <para>
+    /// <b>Invalidated by any call that changes <see cref="Count" /> or the backing array:</b>
+    /// <see cref="Add" />, <see cref="AddRange" />, <see cref="RemoveAt" />, <see cref="Clear" />,
+    /// <see cref="Dispose" />, <see cref="ToPooledArray" /> and <see cref="DetachArray" />.
+    /// Do not hold the span across them; call <see cref="AsSpan" /> again afterwards. A grow
+    /// or <see cref="Dispose" /> returns the old array to <see cref="ArrayPool{T}.Shared" />,
+    /// where unrelated code may already have rented it — writing through a stale span then
+    /// corrupts that code's data, which is worse than reading stale values.
+    /// </para>
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span<T> AsSpan()
+    {
+#if NET6_0_OR_GREATER
+        return MemoryMarshal.CreateSpan(ref MemoryMarshal.GetArrayDataReference(_rented), _count);
+#else
+        return _rented.AsSpan(0, _count);
+#endif
+    }
+
     /// <summary>Returns a <see cref="ReadOnlyMemory{T}" /> view over the valid elements.</summary>
     public ReadOnlyMemory<T> AsMemory() => _rented.AsMemory(0, _count);
 
