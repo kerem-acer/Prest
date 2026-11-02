@@ -60,6 +60,48 @@ static class SwissTableHelpers
     public static int InitialPos(uint hash, int bucketMask) => (int)(hash & (uint)bucketMask);
 
     /// <summary>
+    /// Returns <see langword="true" /> if the slot being erased at <paramref name="slotIdx" /> can go
+    /// back to <see cref="CtrlEmpty" />, or <see langword="false" /> if it must become a tombstone.
+    /// </summary>
+    /// <remarks>
+    /// A lookup stops at the first group that contains an empty slot, and groups start at any
+    /// position. If <paramref name="slotIdx" /> sits inside some group-wide run of non-empty slots,
+    /// another key may have probed past that run when it was inserted, and an empty slot there would
+    /// end that key's lookup early. So the slot may only become empty when the run of non-empty
+    /// slots through it is shorter than a group. Same test as abseil's <c>EraseMetaOnly</c>.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool CanMarkEmpty(ref byte controlBase, int bucketMask, int slotIdx)
+    {
+        // Bit k of each mask is slot (start + k); the mirror region makes wrapped loads valid.
+        var emptyBefore = MatchVector(LoadGroup(ref controlBase, (slotIdx - GroupWidth) & bucketMask), EmptyVector);
+        var emptyAfter = MatchVector(LoadGroup(ref controlBase, slotIdx), EmptyVector);
+        if (emptyBefore == 0 || emptyAfter == 0)
+        {
+            return false;
+        }
+
+        // Non-empty slots directly before slotIdx, plus slotIdx itself and the non-empty slots after it.
+        return LeadingZeroCount16(emptyBefore) + BitOperations.TrailingZeroCount(emptyAfter) < GroupWidth;
+    }
+
+    /// <summary>Counts the zero bits above the highest set bit of a non-zero 16-bit mask.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static int LeadingZeroCount16(uint mask)
+    {
+#if NET
+        return BitOperations.LeadingZeroCount(mask) - 16;
+#else
+        var count = 0;
+        for (var bit = 1u << 15; (mask & bit) == 0; bit >>= 1)
+        {
+            count++;
+        }
+        return count;
+#endif
+    }
+
+    /// <summary>
     /// Branchless mirror-write. Always performs two stores: one to the primary
     /// position, one to <c>slot + (length &amp; mirrorMask)</c>. When slot &lt; GroupWidth
     /// the mirror mask is all-ones so the write lands in the trailing mirror region;

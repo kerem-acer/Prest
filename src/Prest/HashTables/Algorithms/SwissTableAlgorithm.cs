@@ -383,7 +383,7 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
                         removed = slotRef;
                     }
 
-                    var marker = SwissTableHelpers.MatchVector(group, SwissTableHelpers.EmptyVector) != 0 ? SwissTableHelpers.CtrlEmpty : SwissTableHelpers.CtrlDeleted;
+                    var marker = SwissTableHelpers.CanMarkEmpty(ref controlBase, bucketMask, slotIdx) ? SwissTableHelpers.CtrlEmpty : SwissTableHelpers.CtrlDeleted;
                     SwissTableHelpers.WriteControl(
                         ref controlBase,
                         bucketCount,
