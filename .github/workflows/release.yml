@@ -3,15 +3,27 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Re-publish an existing tag with the current workflow (a re-run would replay the
+  # workflow file from the tagged commit).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to publish, e.g. v0.3.0"
+        required: true
+        type: string
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # gh release create
+      id-token: write # NuGet trusted publishing (OIDC token for NuGet/login)
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: refs/tags/${{ env.TAG }}
           fetch-depth: 0
 
       - uses: actions/setup-dotnet@v5
@@ -24,7 +36,12 @@ jobs:
 
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TAG' is not a release tag (expected vX.Y.Z)"
+            exit 1
+          fi
+          echo "VERSION=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - run: dotnet restore
 
@@ -34,14 +51,22 @@ jobs:
 
       - run: dotnet pack Prest.slnx --no-build -c Release -p:PackageVersion=${{ steps.version.outputs.VERSION }} -o ./artifacts
 
+      # Short-lived API key via the nuget.org trusted publishing policy for this repo and
+      # workflow file. Kept right before the push: the key expires after an hour.
+      - name: NuGet login (OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: kerem-acer # nuget.org profile name, not email
+
       - name: Push to NuGet
         run: >
           dotnet nuget push ./artifacts/*.nupkg
-          --api-key ${{ secrets.NUGET_API_KEY }}
+          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
 
       - name: Create GitHub release
-        run: gh release create "$GITHUB_REF_NAME" ./artifacts/*.nupkg ./artifacts/*.snupkg --generate-notes
+        run: gh release create "$TAG" ./artifacts/*.nupkg ./artifacts/*.snupkg --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
