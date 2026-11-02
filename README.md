@@ -252,7 +252,7 @@ var utf8 = map.GetAlternateLookup<ReadOnlySpan<byte>, Utf8Hasher>();
 utf8.TryGetValue("apple"u8, out var count);
 ```
 
-The hasher has to agree with the map's hasher: an alternate key must get the same raw hash (before the finalizer) as the key it stands for, and `Create` must return that key. Prest can't check this. If they disagree, lookups miss entries that are present and `TryAdd` can add duplicate keys.
+The hasher has to agree with the map's hasher: an alternate key must get the same raw hash (before the finalizer) as the key it stands for, and `Create` must return that key. Prest can't check this. If they disagree, lookups miss entries that are present and `TryAdd` can add duplicate keys. A map built on your own [struct hasher](#custom-struct-hasher) has no comparer to ask, so it supports only this overload.
 
 Alternate lookup is in the net10.0 and net11.0 builds. It relies on `allows ref struct`, which needs .NET 9+, so the net8.0 and netstandard builds don't have it.
 

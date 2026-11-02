@@ -244,7 +244,7 @@ public partial class PooledHashMapTests
         // Arrange
         const string Key = "custom";
         const int Value = 3;
-        using var map = PooledHashMap<string, int, SwissTableAlgorithm<KeyValueSlot<string, int>, string, OrdinalStringHasher, NoOpHashFinalizer>>.Create();
+        using var map = SwissHashMap<string, int, OrdinalStringHasher, NoOpHashFinalizer>.Create();
         map.Add(Key, Value);
 
         // Act
