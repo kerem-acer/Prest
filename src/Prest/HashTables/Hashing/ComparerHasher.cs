@@ -13,6 +13,9 @@ public readonly struct ComparerHasher<T> : IHasher<T> where T : notnull
 
     public ComparerHasher(IEqualityComparer<T> comparer) => _comparer = comparer;
 
+    /// <summary>The wrapped comparer; read by alternate lookups to find its <c>IAlternateEqualityComparer</c>.</summary>
+    internal IEqualityComparer<T> Comparer => _comparer;
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public uint ComputeHash(T key) => (uint)_comparer.GetHashCode(key);
 

@@ -206,6 +206,56 @@ foreach (var value in map.Values)    { /* ... */ }
 
 The heap-allocated collections also implement the read-only interfaces, so they can be passed to APIs and LINQ: `PooledHashMap` → `IReadOnlyDictionary<K,V>`, `PooledList<T>` → `IReadOnlyList<T>`, `PooledHashSet` and `PooledStack<T>` → `IReadOnlyCollection<T>`. Enumerating through an interface boxes the enumerator; `foreach` on the concrete type does not. Enumerators don't detect modification — don't add or remove items while enumerating (a hash table grow returns the old buffers to the pool).
 
+### Alternate-key lookup (.NET 10+)
+
+Look up `string` keys by `ReadOnlySpan<char>` without allocating a string, the same way as `Dictionary<TKey,TValue>.GetAlternateLookup`:
+
+```csharp
+using var map = PooledHashMap<string, int>.Create();
+map.Add("apple", 1);
+
+var lookup = map.GetAlternateLookup<ReadOnlySpan<char>>();
+ReadOnlySpan<char> line = "apple=5";
+var name = line[..line.IndexOf('=')];
+
+lookup.TryGetValue(name, out var count);  // true, 1: no string allocated
+lookup.TryAdd("pear".AsSpan(), 2);        // creates the "pear" string, because it is a new key
+lookup.Remove(name);
+```
+
+The lookup has `TryGetValue` (also with the stored key), `ContainsKey`, the indexer getter, `TryAdd` and `Remove`. Sets have one too, with `Add`, `Contains`, `Remove` and `TryGetValue`. It works with the default hasher and with any comparer that implements `IAlternateEqualityComparer<TAlternate, TKey>`. All the built-in `StringComparer`s do, so `ComparerSwissHashMap<string, int>.Create(StringComparer.OrdinalIgnoreCase)` supports span lookups as well. If the comparer doesn't, `GetAlternateLookup` throws `InvalidOperationException` and `TryGetAlternateLookup` returns `false`. As with `Dictionary`, each hash or equality check is one interface call to the comparer.
+
+To skip those calls, or to look up by a type no comparer supports, pass a struct `IAlternateHasher<TAlternate, TKey>` and the JIT specializes the lookup for it. This one finds `string` keys by their UTF-8 bytes in a default map:
+
+```csharp
+readonly struct Utf8Hasher : IAlternateHasher<ReadOnlySpan<byte>, string>
+{
+    // Hash and compare the UTF-16 form, so the hash matches the map's string hasher.
+    public uint ComputeHash(ReadOnlySpan<byte> utf8)
+    {
+        Span<char> chars = utf8.Length <= 128 ? stackalloc char[128] : new char[utf8.Length];
+        Utf8.ToUtf16(utf8, chars, out _, out var length);
+        return (uint)string.GetHashCode(chars[..length]);
+    }
+
+    public bool Equals(ReadOnlySpan<byte> utf8, string key)
+    {
+        Span<char> chars = utf8.Length <= 128 ? stackalloc char[128] : new char[utf8.Length];
+        Utf8.ToUtf16(utf8, chars, out _, out var length);
+        return chars[..length].SequenceEqual(key);
+    }
+
+    public string Create(ReadOnlySpan<byte> utf8) => Encoding.UTF8.GetString(utf8);
+}
+
+var utf8 = map.GetAlternateLookup<ReadOnlySpan<byte>, Utf8Hasher>();
+utf8.TryGetValue("apple"u8, out var count);
+```
+
+The hasher has to agree with the map's hasher: an alternate key must get the same raw hash (before the finalizer) as the key it stands for, and `Create` must return that key. Prest can't check this. If they disagree, lookups miss entries that are present and `TryAdd` can add duplicate keys. A map built on your own [struct hasher](#custom-struct-hasher) has no comparer to ask, so it supports only this overload.
+
+Alternate lookup is in the net10.0 and net11.0 builds. It relies on `allows ref struct`, which needs .NET 9+, so the net8.0 and netstandard builds don't have it.
+
 ### Pooled arrays and lists
 
 ```csharp
@@ -444,6 +494,7 @@ dotnet run --project examples/Prest.Examples -c Release
 - `PooledHashMapBenchmarks.cs` — `PooledHashMap<int,int>` vs `Dictionary<int,int>` vs `Faster.Map.DenseMap<int,int>` across lookup (hit + miss), `ContainsKey`, insert-from-empty, and steady-state churn at N ∈ {16, 256, 4096, 65536}.
 - `PooledHashMapStringBenchmarks.cs` — same comparisons on `string`-keyed maps.
 - `AlgorithmComparisonBenchmarks.cs` — the four algorithms head-to-head.
+- `AlternateLookupBenchmarks.cs` — `ReadOnlySpan<char>` and UTF-8 lookups on `string`-keyed maps vs `Dictionary.GetAlternateLookup`, through the comparer and through a struct hasher.
 - `FinalizerComparisonBenchmarks.cs` — `NoOp` / `Fibonacci` / `Lowbias32` / `XMX` on Swiss and RobinHood with sequential-int keys.
 - `PooledStackBenchmarks.cs` — `PooledStack<int>` and `StackOnlyPooledStack<int>` vs `Stack<int>`: push N then pop N, on a fresh stack per call and on a reused one, at N ∈ {16, 256, 4096}.
 

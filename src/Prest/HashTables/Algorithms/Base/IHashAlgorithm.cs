@@ -38,6 +38,51 @@ public interface IHashAlgorithm<TSlot, in TKey> : IDisposable
     bool Remove<TExtractor>(TKey key)
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>;
 
+#if NET9_0_OR_GREATER
+    // Alternate-key support (.NET 9+). The probe-based members do the same work
+    // as the key-based ones above, but the probe supplies the raw hash and the
+    // equality test, so the caller can search with a key of another type (a
+    // ReadOnlySpan<char> for string keys, say) without creating a TKey. The
+    // built-in algorithms run both through one shared loop per operation.
+    // TExtractor is the same slot-key extractor the key-based members take; an
+    // algorithm needs it where it re-hashes entries it already stores (growth,
+    // Robin Hood displacement, Chained swap-with-last).
+
+    /// <summary>
+    /// The <see cref="IEqualityComparer{T}" /> behind this algorithm's hasher:
+    /// <see cref="EqualityComparer{T}.Default" /> for <see cref="EqualityDefaultHasher{T}" />, the
+    /// wrapped comparer for <see cref="ComparerHasher{T}" />, or <see langword="null" /> for a hasher
+    /// that does not wrap one. <c>GetAlternateLookup&lt;TAlternate&gt;()</c> checks it for
+    /// <see cref="IAlternateEqualityComparer{TAlternate,T}" />.
+    /// </summary>
+    IEqualityComparer<TKey>? Comparer { get; }
+
+    /// <summary>
+    /// Finds the slot that <paramref name="probe" /> matches. Returns a null ref on a miss; check with
+    /// <c>Unsafe.IsNullRef</c>.
+    /// </summary>
+    ref readonly TSlot FindSlot<TExtractor, TProbe>(TProbe probe)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>, allows ref struct;
+
+    /// <summary>
+    /// Inserts the slot built by <see cref="IInsertProbe{TSlot}.CreateSlot" /> unless
+    /// <paramref name="probe" /> matches an existing slot. Returns <see langword="false" /> on a
+    /// duplicate; <see cref="IInsertProbe{TSlot}.CreateSlot" /> is then never called.
+    /// </summary>
+    bool Insert<TExtractor, TProbe>(TProbe probe, out int slotIdx)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IInsertProbe<TSlot>, allows ref struct;
+
+    /// <summary>
+    /// Removes the slot that <paramref name="probe" /> matches and returns a copy of it in
+    /// <paramref name="removed" />.
+    /// </summary>
+    bool Remove<TExtractor, TProbe>(TProbe probe, out TSlot removed)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>, allows ref struct;
+#endif
+
     // Enumeration primitives — wrapper enumerators call these per-slot. Dense
     // algorithms (Blitz) set SlotScanLimit == Count and IsSlotLive trivially
     // true; sparse algorithms (SwissTable, RobinHood, Linear) walk to the
