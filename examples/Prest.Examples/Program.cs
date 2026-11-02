@@ -6,6 +6,8 @@ var examples = new (string Name, Action Run)[]
     ("basic-set", BasicSet.Run),
     ("algorithms", Algorithms.Run),
     ("custom-comparer", CustomComparer.Run),
+    ("custom-hasher", CustomHasher.Run),
+    ("typed-fields", TypedFields.Run),
     ("finalizers", Finalizers.Run),
     ("enumeration", Enumeration.Run),
 };

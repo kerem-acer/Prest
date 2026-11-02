@@ -43,8 +43,9 @@ public class PooledHashSet<T, TAlgo> : IReadOnlyCollection<T>, IDisposable
     /// instance to the cache.
     /// </summary>
     /// <remarks>
-    /// Single-slot cache keyed per closed generic and per thread. A second
-    /// <see cref="Create()" /> before the first is returned allocates fresh. For pooling
+    /// Single-slot cache per thread and per concrete type: this generic type and each alias
+    /// (<c>PooledHashSet&lt;T&gt;</c>, <c>SwissHashSet&lt;T&gt;</c>, …) have their own. A
+    /// second <see cref="Create()" /> before the first is returned allocates fresh. For pooling
     /// that survives <c>await</c> boundaries, use <c>PooledHashSetPool</c> in
     /// <c>Prest.ObjectPool</c>.
     /// </remarks>
@@ -72,21 +73,37 @@ public class PooledHashSet<T, TAlgo> : IReadOnlyCollection<T>, IDisposable
     }
 
     /// <summary>
-    /// Clears <paramref name="set" /> and places it in the per-thread cache. If the
-    /// slot is already occupied, releases the set's rented buffers instead.
+    /// Clears <paramref name="set" /> and places it in the per-thread cache of its own type —
+    /// the one its type's <c>Create</c> reads from, so an alias instance goes back to that
+    /// alias's cache. If the slot is already occupied, releases the set's rented buffers instead.
     /// </summary>
-    public static void Return(PooledHashSet<T, TAlgo> set)
+    public static void Return(PooledHashSet<T, TAlgo> set) => set.ReturnToCache();
+
+    /// <summary>Puts this instance into its own type's per-thread cache. Aliases override it.</summary>
+    private protected virtual void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
+
+    /// <summary>
+    /// Clears <paramref name="set" /> into <paramref name="slot" /> when the slot is free and the
+    /// set is exactly a <typeparamref name="TSelf" />; otherwise releases its rented buffers. The
+    /// exact-type check keeps subclass instances (which that type's <c>Create</c> never hands
+    /// out) out of the cache.
+    /// </summary>
+    private protected static void ReturnToSlot<TSelf>(ref TSelf? slot, TSelf set)
+        where TSelf : PooledHashSet<T, TAlgo>
     {
-        if (_threadCache is null)
+        if (slot is null && set.GetType() == typeof(TSelf))
         {
             set._algo.Clear();
-            _threadCache = set;
+            slot = set;
         }
         else
         {
-            set._algo.Dispose();
+            set.ReleaseBuffers();
         }
     }
+
+    /// <summary>Returns the rented buffers to the pool without caching the instance.</summary>
+    private protected void ReleaseBuffers() => _algo.Dispose();
 
     protected PooledHashSet(int capacity = 0, TAlgo algorithm = default)
     {
@@ -178,7 +195,7 @@ public class PooledHashSet<T, TAlgo> : IReadOnlyCollection<T>, IDisposable
 
     public virtual void Dispose()
     {
-        Return(this);
+        ReturnToCache();
         GC.SuppressFinalize(this);
     }
 

@@ -11,6 +11,7 @@ Zero-allocation pooled collections for .NET with pluggable, zero-cost hash-table
 
 - **Pooled backing store.** Arrays come from `ArrayPool<T>.Shared`; `Dispose` returns them. Single-consumer ownership — no locking, no concurrent mutation.
 - **Pluggable hash algorithm.** `PooledHashMap<K,V>` and `PooledHashSet<T>` pick a probe strategy at the type-parameter level: **Swiss** (SIMD group scan; default, matches .NET 9's `Dictionary`), **RobinHood** (displacement-tracking linear, backward-shift on erase — no tombstones), **Linear** (simplest), **Chained** (dense entry storage, iteration-friendly). The algorithm is a `struct` generic — the JIT monomorphizes every call end-to-end. No virtual dispatch, no boxing.
+- **Short, first-class type names.** `PooledHashMap<K,V>`, `SwissHashMap<K,V>`, `RobinHoodHashMap<K,V,TFinalizer>`, `ComparerLinearHashMap<K,V>`, … are real types with their own `Create`, so fields and parameters never need the full generic spelling.
 - **Auto-return-on-`Dispose`.** `PooledHashMap<K,V>.Create()` rents from a per-thread cache; `using` disposes back into that cache so the next rental on the same thread skips allocation entirely.
 - **Concurrent pool for `await` code.** `Prest.ObjectPool` ships `PooledHashMapPool<K,V>` / `PooledHashSetPool<T>` / `PooledBufferWriterPool<T>` backed by `Microsoft.Extensions.ObjectPool.DefaultObjectPool` — safe across threads, survives `await`, `Dispose` auto-returns to the pool.
 - **Zero-allocation enumeration.** `foreach`, `.Keys`, `.Values` all return value-type enumerators — no `IEnumerator<T>` boxing.
@@ -96,6 +97,25 @@ set.Add("apple");
 var wasNew = set.Add("apple");  // false — already present
 ```
 
+Every alias's `Create` returns the alias itself, so the short name works for fields, parameters and return types:
+
+```csharp
+sealed class WordCounter : IDisposable
+{
+    readonly PooledHashMap<string, int> _counts = PooledHashMap<string, int>.Create(capacity: 64);
+    readonly ComparerSwissHashSet<string> _stopWords =
+        ComparerSwissHashSet<string>.Create(StringComparer.OrdinalIgnoreCase);
+
+    public void Dispose()
+    {
+        _counts.Dispose();
+        _stopWords.Dispose();
+    }
+}
+```
+
+The generic form `PooledHashMap<K,V,TAlgo>` / `PooledHashSet<T,TAlgo>` is still there for code that is generic over the algorithm; every alias derives from it.
+
 ### Pick an algorithm
 
 Same API surface on every alias — swap the type name, nothing else:
@@ -107,7 +127,19 @@ using var linear = LinearHashMap<int, int>.Create(32);
 using var chain  = ChainedHashMap<int, int>.Create(32);
 ```
 
-`PooledHashMap<K,V>` is an alias for `SwissHashMap<K,V>`. See [**Choosing an algorithm**](#choosing-an-algorithm) below.
+`PooledHashMap<K,V>` and `SwissHashMap<K,V>` are the same configuration; `SwissHashMap<K,V>` derives from `PooledHashMap<K,V>`, so it can be passed wherever a `PooledHashMap<K,V>` is expected. See [**Choosing an algorithm**](#choosing-an-algorithm) below.
+
+Each algorithm comes in five shapes (sets mirror maps, with `T` in place of `K,V`):
+
+| Alias | Configuration |
+|---|---|
+| `{Algo}HashMap<K,V>` | default hasher, no finalizer |
+| `{Algo}HashMap<K,V,TFinalizer>` | default hasher + [finalizer](#custom-hash-finalizer) |
+| `{Algo}HashMap<K,V,THasher,TFinalizer>` | your own stateless [struct hasher](#custom-struct-hasher) + finalizer |
+| `Comparer{Algo}HashMap<K,V>` | runtime [`IEqualityComparer<K>`](#custom-equality-comparer) |
+| `Comparer{Algo}HashMap<K,V,TFinalizer>` | runtime `IEqualityComparer<K>` + finalizer |
+
+`{Algo}` is `Swiss`, `RobinHood`, `Linear` or `Chained`.
 
 ### Custom equality comparer
 
@@ -119,7 +151,16 @@ using var map = ComparerSwissHashMap<string, int>.Create(
 
 map.Add("Hello", 1);
 Console.WriteLine(map.ContainsKey("HELLO"));  // True
+Console.WriteLine(map.Comparer == StringComparer.OrdinalIgnoreCase);  // True
+
+// Comparer + finalizer.
+using var ids = ComparerRobinHoodHashMap<string, int, FibonacciFinalizer>.Create(
+    StringComparer.Ordinal);
 ```
+
+- `Create(comparer)` is the only way to create one; the comparer-less `Create()` / `Create(capacity)` overloads are compile errors on these aliases. Passing `null` uses `EqualityComparer<T>.Default`.
+- `Comparer` returns the comparer the map or set uses.
+- The per-thread cache only hands a disposed instance back to a `Create` call with the **same comparer instance** (reference equality — singletons like `StringComparer.OrdinalIgnoreCase` qualify). A different comparer gets a new instance.
 
 ### Custom hash finalizer
 
@@ -135,6 +176,23 @@ using var xmx = RobinHoodHashMap<int, int, XmxFinalizer>.Create(capacity: 64);
 ```
 
 See [**Choosing a finalizer**](#choosing-a-finalizer) below.
+
+### Custom struct hasher
+
+For custom equality without the virtual call of an `IEqualityComparer<T>`, implement `IHasher<T>` on a stateless `readonly struct` and plug it in with the four-argument alias (three for sets). The JIT inlines it like the default hasher:
+
+```csharp
+readonly struct IgnoreCaseHasher : IHasher<string>
+{
+    public uint ComputeHash(string key) => (uint)string.GetHashCode(key, StringComparison.OrdinalIgnoreCase);
+    public bool Equals(string x, string y) => string.Equals(x, y, StringComparison.OrdinalIgnoreCase);
+}
+
+using var headers = SwissHashMap<string, string, IgnoreCaseHasher, NoOpHashFinalizer>.Create();
+using var seen = LinearHashSet<string, IgnoreCaseHasher, NoOpHashFinalizer>.Create();
+```
+
+The alias always uses `default(THasher)`, so the hasher can't carry state. `ComparerHasher<T>` needs a comparer instance and is rejected with `NotSupportedException`; use a `Comparer*` alias instead.
 
 ### Enumeration (zero allocation)
 
@@ -257,7 +315,29 @@ string json = JsonSerializer.Serialize(values, options);
 using var roundTripped = JsonSerializer.Deserialize<PooledArray<int>>(json, options);
 ```
 
-Map keys must be `IUtf8SpanFormattable` (enforced by the converter's generic constraints).
+Alias-typed properties deserialize to the alias type — a `PooledHashMap<string, int>` property comes back as a `PooledHashMap<string, int>`, a `RobinHoodHashSet<int, FibonacciFinalizer>` as exactly that:
+
+```csharp
+public sealed class Order
+{
+    public PooledHashMap<string, int>? Quantities { get; set; }
+    public SwissHashSet<string>? Tags { get; set; }
+}
+
+var order = JsonSerializer.Deserialize<Order>(json, options);
+```
+
+Map keys are written and read as JSON property names through the key type's converter, so every key type `System.Text.Json` supports for `Dictionary<K,V>` keys works (`string`, numbers, `Guid`, enums, …).
+
+`Comparer*` aliases serialize normally, but the JSON doesn't carry the comparer, so the factory can't deserialize them and throws `NotSupportedException`. Register an alias converter that supplies the comparer, ahead of the factory:
+
+```csharp
+options.Converters.Insert(0, new PooledHashMapAliasConverter<
+    ComparerSwissHashMap<string, int>, string, int,
+    SwissTableAlgorithm<KeyValueSlot<string, int>, string, ComparerHasher<string>, NoOpHashFinalizer>>(
+    capacity => ComparerSwissHashMap<string, int>.Create(StringComparer.OrdinalIgnoreCase, capacity)));
+```
+
 If you prefer to register converters individually — e.g. to restrict which closed types
 are supported — the factory-less form is still there:
 
@@ -268,6 +348,11 @@ options.Converters.Add(new PooledHashSetConverter<int,
     SwissTableAlgorithm<int, int, EqualityDefaultHasher<int>, NoOpHashFinalizer>>());
 options.Converters.Add(new PooledHashMapConverter<int, string,
     SwissTableAlgorithm<KeyValueSlot<int, string>, int, EqualityDefaultHasher<int>, NoOpHashFinalizer>>());
+
+// Alias types: pass the alias's own Create.
+options.Converters.Add(new PooledHashMapAliasConverter<PooledHashMap<string, int>, string, int,
+    SwissTableAlgorithm<KeyValueSlot<string, int>, string, EqualityDefaultHasher<string>, NoOpHashFinalizer>>(
+    PooledHashMap<string, int>.Create));
 ```
 
 ### YAML
@@ -289,7 +374,7 @@ PooledArray<string> items = ["alpha", "beta"];
 string yaml = YamlSerializer.SerializeToString(items, options);
 ```
 
-The resolver covers `PooledArray<T>`, `PooledList<T>`, `PooledHashMap<K,V>`, and `PooledHashSet<T>` in one registration — no need to add each formatter individually.
+The resolver covers `PooledArray<T>`, `PooledList<T>`, `PooledHashMap<K,V>`, and `PooledHashSet<T>` in one registration — no need to add each formatter individually. Alias types round-trip as themselves, as with JSON. `Comparer*` aliases need a `PooledHashMapAliasFormatter` / `PooledHashSetAliasFormatter` constructed with a comparer-supplying factory, placed ahead of the resolver (for example as the first argument of `CompositeResolver.Create(formatters, resolvers)`).
 
 ### Immutable interop
 
@@ -331,7 +416,7 @@ using var back = PooledArray.FromImmutableArray(immutable);
 
 Both `PooledHashMap<K,V>.Create()` (core) and `PooledHashMapPool<K,V>.Create()` (`Prest.ObjectPool`) return a ready-to-use map; both auto-return on `Dispose`. The difference is the storage backing the pool:
 
-- **Per-thread cache** (core) — a `[ThreadStatic]` single-slot cache. Zero synchronisation. Ideal for synchronous request handlers and short-lived scopes. Do **not** keep a reference to the map after `Dispose` — another caller on this thread will rent it.
+- **Per-thread cache** (core) — a `[ThreadStatic]` single-slot cache per thread **and per type**: `PooledHashMap<K,V>`, `SwissHashMap<K,V>`, the generic `PooledHashMap<K,V,TAlgo>` and every other alias each have their own slot, and `Dispose` returns an instance to the slot of its own type. Zero synchronisation. Ideal for synchronous request handlers and short-lived scopes. Do **not** keep a reference to the map after `Dispose` — another caller on this thread will rent it.
 - **`Prest.ObjectPool`** — `Microsoft.Extensions.ObjectPool.DefaultObjectPool` (max 64 retained). Concurrent-safe; instances survive `await` boundaries. Use when the map must outlive a single synchronous scope.
 
 You should never mix the two on the same instance — a map rented from `PooledHashMapPool` returns itself to that pool on `Dispose`, not to the per-thread cache.
@@ -343,6 +428,8 @@ You should never mix the two on the same instance — a map rented from `PooledH
 - `BasicMap.cs`, `BasicSet.cs` — minimal CRUD.
 - `Algorithms.cs` — Swiss / RobinHood / Linear / Chained side-by-side.
 - `CustomComparer.cs` — wiring an `IEqualityComparer<T>`.
+- `CustomHasher.cs` — a stateless struct `IHasher<T>` through the hasher alias.
+- `TypedFields.cs` — a class holding maps and sets in fields declared with the short alias types.
 - `Finalizers.cs` — Fibonacci + XMX finalizers on clustered keys.
 - `Enumeration.cs` — `foreach`, `.Keys`, `.Values`.
 
@@ -384,9 +471,14 @@ options.Converters.Add(new PooledHashSetConverter<int,
     SwissTableAlgorithm<int, int, EqualityDefaultHasher<int>, NoOpHashFinalizer>>());
 options.Converters.Add(new PooledHashMapConverter<int, string,
     SwissTableAlgorithm<KeyValueSlot<int, string>, int, EqualityDefaultHasher<int>, NoOpHashFinalizer>>());
+
+// Alias types (PooledHashMap<K,V>, SwissHashSet<T>, …) take the alias's own Create.
+options.Converters.Add(new PooledHashSetAliasConverter<SwissHashSet<string>, string,
+    SwissTableAlgorithm<string, string, EqualityDefaultHasher<string>, NoOpHashFinalizer>>(
+    SwissHashSet<string>.Create));
 ```
 
-The same applies to VYaml: instead of adding `PooledTypeFormatterResolver.Instance` to your resolver chain, construct the concrete `PooledArrayFormatter<T>` / `PooledListFormatter<T>` / `PooledHashMapFormatter<K,V,TAlgo>` / `PooledHashSetFormatter<T,TAlgo>` you need at compile time and compose them into your own `IYamlFormatterResolver`.
+The same applies to VYaml: instead of adding `PooledTypeFormatterResolver.Instance` to your resolver chain, construct the concrete `PooledArrayFormatter<T>` / `PooledListFormatter<T>` / `PooledHashMapFormatter<K,V,TAlgo>` / `PooledHashSetFormatter<T,TAlgo>` (or `PooledHashMapAliasFormatter<TMap,K,V,TAlgo>` / `PooledHashSetAliasFormatter<TSet,T,TAlgo>` for alias types) you need at compile time and compose them into your own `IYamlFormatterResolver`.
 
 ## Target frameworks
 

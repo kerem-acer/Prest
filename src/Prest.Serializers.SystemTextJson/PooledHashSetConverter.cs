@@ -3,6 +3,12 @@ using System.Text.Json.Serialization;
 
 namespace Prest.Serializers.SystemTextJson;
 
+/// <summary>
+/// Converter for the generic <see cref="PooledHashSet{T,TAlgo}" />. Alias types
+/// (<c>PooledHashSet&lt;T&gt;</c>, <c>SwissHashSet&lt;T&gt;</c>, …) use
+/// <see cref="PooledHashSetAliasConverter{TSet,T,TAlgo}" /> so deserialization produces the
+/// alias type.
+/// </summary>
 public sealed class PooledHashSetConverter<T, TAlgo> : JsonConverter<PooledHashSet<T, TAlgo>>
     where T : notnull
     where TAlgo : struct, IHashAlgorithm<T, T>
@@ -39,14 +45,5 @@ public sealed class PooledHashSetConverter<T, TAlgo> : JsonConverter<PooledHashS
 
     public override void Write(
         Utf8JsonWriter writer, PooledHashSet<T, TAlgo> value, JsonSerializerOptions options)
-    {
-        writer.WriteStartArray();
-        var elementTypeInfo = options.GetTypedTypeInfo<T>();
-        foreach (var item in value)
-        {
-            JsonSerializer.Serialize(writer, item, elementTypeInfo);
-        }
-
-        writer.WriteEndArray();
-    }
+        => PooledHashJson.WriteItems(writer, value, options);
 }

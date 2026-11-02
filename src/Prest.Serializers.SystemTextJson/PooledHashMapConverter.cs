@@ -4,8 +4,19 @@ using System.Text.Json.Serialization;
 
 namespace Prest.Serializers.SystemTextJson;
 
+/// <summary>
+/// Converter for the generic <see cref="PooledHashMap{TKey,TValue,TAlgo}" />. Alias types
+/// (<c>PooledHashMap&lt;K,V&gt;</c>, <c>SwissHashMap&lt;K,V&gt;</c>, …) use
+/// <see cref="PooledHashMapAliasConverter{TMap,TKey,TValue,TAlgo}" /> so deserialization
+/// produces the alias type.
+/// </summary>
+/// <remarks>
+/// Keys are written and read as JSON property names through the key type's converter, so any
+/// key type System.Text.Json supports for <see cref="Dictionary{TKey,TValue}" /> keys works
+/// (<see cref="string" />, numbers, <see cref="Guid" />, enums, …).
+/// </remarks>
 public sealed class PooledHashMapConverter<TKey, TValue, TAlgo> : JsonConverter<PooledHashMap<TKey, TValue, TAlgo>>
-    where TKey : ISpanFormattable, IUtf8SpanFormattable
+    where TKey : notnull
     where TAlgo : struct, IHashAlgorithm<KeyValueSlot<TKey, TValue>, TKey>
 {
     public override PooledHashMap<TKey, TValue, TAlgo> Read(
@@ -23,8 +34,7 @@ public sealed class PooledHashMapConverter<TKey, TValue, TAlgo> : JsonConverter<
             throw new JsonException($"Expected StartObject, got {reader.TokenType}");
         }
 
-        var keyTypeInfo = options.GetTypedTypeInfo<TKey>();
-        var keyConverter = (JsonConverter<TKey>)keyTypeInfo.Converter;
+        var keyConverter = PooledHashJson.KeyConverter<TKey>(options);
         var valueTypeInfo = options.GetTypedTypeInfo<TValue>();
 
         // PooledList always rents from ArrayPool — we need a rented array to hand off
@@ -65,27 +75,5 @@ public sealed class PooledHashMapConverter<TKey, TValue, TAlgo> : JsonConverter<
         Utf8JsonWriter writer,
         PooledHashMap<TKey, TValue, TAlgo> value,
         JsonSerializerOptions options)
-    {
-        writer.WriteStartObject();
-        var valueTypeInfo = options.GetTypedTypeInfo<TValue>();
-        foreach (var kv in value)
-        {
-            WriteKey(writer, kv.Key);
-            JsonSerializer.Serialize(writer, kv.Value, valueTypeInfo);
-        }
-
-        writer.WriteEndObject();
-    }
-
-    static void WriteKey(Utf8JsonWriter writer, TKey key)
-    {
-        Span<byte> buf = stackalloc byte[256];
-        key.TryFormat(
-            buf,
-            out var written,
-            default,
-            null);
-
-        writer.WritePropertyName(buf[..written]);
-    }
+        => PooledHashJson.Write(writer, value, options);
 }

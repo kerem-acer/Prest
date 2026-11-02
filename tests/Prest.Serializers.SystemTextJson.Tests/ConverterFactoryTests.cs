@@ -6,7 +6,7 @@ namespace Prest.Serializers.SystemTextJson.Tests;
 /// Exercises <see cref="PooledTypesJsonConverterFactory" /> — a single registration
 /// should cover every pooled generic type with any algorithm closure.
 /// </summary>
-public class ConverterFactoryTests
+public partial class ConverterFactoryTests
 {
     static JsonSerializerOptions Options()
     {

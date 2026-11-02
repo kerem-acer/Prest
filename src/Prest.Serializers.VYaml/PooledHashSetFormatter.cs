@@ -4,7 +4,7 @@ using VYaml.Serialization;
 
 namespace Prest.Serializers.VYaml;
 
-public sealed class PooledHashSetFormatter<T, TAlgo> : IYamlFormatter<PooledHashSet<T, TAlgo>>
+public sealed class PooledHashSetFormatter<T, TAlgo> : IYamlFormatter<PooledHashSet<T, TAlgo>?>
     where T : notnull
     where TAlgo : struct, IHashAlgorithm<T, T>
 {
@@ -36,8 +36,14 @@ public sealed class PooledHashSetFormatter<T, TAlgo> : IYamlFormatter<PooledHash
         }
     }
 
-    public void Serialize(ref Utf8YamlEmitter emitter, PooledHashSet<T, TAlgo> value, YamlSerializationContext context)
+    public void Serialize(ref Utf8YamlEmitter emitter, PooledHashSet<T, TAlgo>? value, YamlSerializationContext context)
     {
+        if (value is null)
+        {
+            emitter.WriteNull();
+            return;
+        }
+
         emitter.BeginSequence();
         foreach (var item in value)
         {

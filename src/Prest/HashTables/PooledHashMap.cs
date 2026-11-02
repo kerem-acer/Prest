@@ -44,8 +44,9 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TKey, TVal
     /// instance to the cache.
     /// </summary>
     /// <remarks>
-    /// Single-slot cache keyed per closed generic and per thread. A second
-    /// <see cref="Create()" /> before the first is returned allocates fresh. For pooling
+    /// Single-slot cache per thread and per concrete type: this generic type and each alias
+    /// (<c>PooledHashMap&lt;K,V&gt;</c>, <c>SwissHashMap&lt;K,V&gt;</c>, …) have their own. A
+    /// second <see cref="Create()" /> before the first is returned allocates fresh. For pooling
     /// that survives <c>await</c> boundaries, use <c>PooledHashMapPool</c> in
     /// <c>Prest.ObjectPool</c>.
     /// </remarks>
@@ -80,21 +81,37 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TKey, TVal
         => new(rentedKeys, rentedValues, count);
 
     /// <summary>
-    /// Clears <paramref name="map" /> and places it in the per-thread cache. If the
-    /// slot is already occupied, releases the map's rented buffers instead.
+    /// Clears <paramref name="map" /> and places it in the per-thread cache of its own type —
+    /// the one its type's <c>Create</c> reads from, so an alias instance goes back to that
+    /// alias's cache. If the slot is already occupied, releases the map's rented buffers instead.
     /// </summary>
-    public static void Return(PooledHashMap<TKey, TValue, TAlgo> map)
+    public static void Return(PooledHashMap<TKey, TValue, TAlgo> map) => map.ReturnToCache();
+
+    /// <summary>Puts this instance into its own type's per-thread cache. Aliases override it.</summary>
+    private protected virtual void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
+
+    /// <summary>
+    /// Clears <paramref name="map" /> into <paramref name="slot" /> when the slot is free and the
+    /// map is exactly a <typeparamref name="TSelf" />; otherwise releases its rented buffers. The
+    /// exact-type check keeps subclass instances (which that type's <c>Create</c> never hands
+    /// out) out of the cache.
+    /// </summary>
+    private protected static void ReturnToSlot<TSelf>(ref TSelf? slot, TSelf map)
+        where TSelf : PooledHashMap<TKey, TValue, TAlgo>
     {
-        if (_threadCache is null)
+        if (slot is null && map.GetType() == typeof(TSelf))
         {
             map._algo.Clear();
-            _threadCache = map;
+            slot = map;
         }
         else
         {
-            map._algo.Dispose();
+            map.ReleaseBuffers();
         }
     }
+
+    /// <summary>Returns the rented buffers to the pool without caching the instance.</summary>
+    private protected void ReleaseBuffers() => _algo.Dispose();
 
     protected PooledHashMap(int capacity = 0, TAlgo algorithm = default)
     {
@@ -232,7 +249,7 @@ public class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TKey, TVal
                 }
             }
         }
-        Return(this);
+        ReturnToCache();
         GC.SuppressFinalize(this);
     }
 
