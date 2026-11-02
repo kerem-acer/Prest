@@ -132,6 +132,60 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref readonly TSlot FindSlot<TExtractor>(TKey key)
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        => ref FindCore<KeyMode, TExtractor, NoProbe<TSlot>>(key, default);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Insert<TExtractor>(TKey key, TSlot newSlot, out int slotIdx)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        => InsertCore<KeyMode, TExtractor, NoProbe<TSlot>>(key, newSlot, default, out slotIdx);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Remove<TExtractor>(TKey key)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        => RemoveCore<KeyMode, TExtractor, NoProbe<TSlot>>(key, default, ref Unsafe.NullRef<TSlot>());
+
+#if NET9_0_OR_GREATER
+    public readonly IEqualityComparer<TKey>? Comparer => HasherComparer.Get<TKey, THasher>(in _hasher);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref readonly TSlot FindSlot<TExtractor, TProbe>(TProbe probe)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>, allows ref struct
+        => ref FindCore<ProbeMode, TExtractor, TProbe>(default!, probe);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Insert<TExtractor, TProbe>(TProbe probe, out int slotIdx)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IInsertProbe<TSlot>, allows ref struct
+        => InsertCore<ProbeMode, TExtractor, TProbe>(default!, default!, probe, out slotIdx);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Remove<TExtractor, TProbe>(TProbe probe, out TSlot removed)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>, allows ref struct
+    {
+        removed = default!;
+        return RemoveCore<ProbeMode, TExtractor, TProbe>(default!, probe, ref removed);
+    }
+#endif
+
+    // The loops below are shared by the key-based members above and the
+    // alternate-key (probe-based) members. TMode is KeyMode or ProbeMode, a
+    // JIT-time constant: KeyMode hashes and compares `key` with this algorithm's
+    // own hasher, exactly as before probes existed; ProbeMode asks `probe`. (A
+    // wrapper struct around the key would cost a real call per hash and per
+    // comparison in shared generic code, i.e. for reference-type keys.)
+    // RemoveCore copies the removed slot into `removed` only in ProbeMode; the
+    // key-based Remove has no use for it and passes a null ref.
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    readonly ref readonly TSlot FindCore<TMode, TExtractor, TProbe>(TKey key, TProbe probe)
+        where TMode : struct
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>
+#if NET9_0_OR_GREATER
+        , allows ref struct
+#endif
     {
         var controls = _controls;
         if (controls is null)
@@ -144,7 +198,8 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
         ref var slotBase = ref MemoryMarshal.GetArrayDataReference(slots);
         var bucketMask = _bucketMask;
 
-        var hash = Unsafe.AsRef(in _finalizer).Finalize(Unsafe.AsRef(in _hasher).ComputeHash(key));
+        var hash = Unsafe.AsRef(in _finalizer).Finalize(
+            KeyMode.Is<TMode>() ? Unsafe.AsRef(in _hasher).ComputeHash(key) : probe.ComputeHash());
         var h2 = SwissTableHelpers.H2(hash);
         var pos = SwissTableHelpers.InitialPos(hash, bucketMask);
         var jumpDistance = 0;
@@ -161,7 +216,9 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
                 var bit = BitOperations.TrailingZeroCount(matchBits);
                 var slotIdx = (pos + bit) & bucketMask;
                 ref var slotRef = ref Unsafe.Add(ref slotBase, (nint)(uint)slotIdx);
-                if (Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in slotRef)))
+                if (KeyMode.Is<TMode>()
+                    ? Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in slotRef))
+                    : probe.Matches(in slotRef))
                 {
                     return ref slotRef;
                 }
@@ -180,27 +237,19 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Insert<TExtractor>(TKey key, TSlot newSlot, out int slotIdx)
+    bool InsertCore<TMode, TExtractor, TProbe>(TKey key, TSlot newSlot, TProbe probe, out int slotIdx)
+        where TMode : struct
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IInsertProbe<TSlot>
+#if NET9_0_OR_GREATER
+        , allows ref struct
+#endif
     {
         if (_count + _tombstoneCount >= _capacity)
         {
             Grow<TExtractor>();
         }
 
-        return TryInsertCore<TExtractor>(key, newSlot, out slotIdx) == InsertAttempt.Inserted;
-    }
-
-    enum InsertAttempt
-    {
-        Inserted,
-        Duplicate,
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    InsertAttempt TryInsertCore<TExtractor>(TKey key, TSlot newSlot, out int slotIdx)
-        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
-    {
         var controls = _controls!;
         var slots = _slots!;
         ref var controlBase = ref MemoryMarshal.GetArrayDataReference(controls);
@@ -208,14 +257,15 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
         var bucketCount = _bucketCount;
         var bucketMask = _bucketMask;
 
-        var hash = Unsafe.AsRef(in _finalizer).Finalize(Unsafe.AsRef(in _hasher).ComputeHash(key));
+        var hash = Unsafe.AsRef(in _finalizer).Finalize(
+            KeyMode.Is<TMode>() ? Unsafe.AsRef(in _hasher).ComputeHash(key) : probe.ComputeHash());
         var h2 = SwissTableHelpers.H2(hash);
         var pos = SwissTableHelpers.InitialPos(hash, bucketMask);
         var jumpDistance = 0;
         var insertionFromTombstone = false;
         var insertionSlot = -1;
 
-        // No probe-limit counter: caller guarantees _count + _tombstones < _capacity
+        // No probe-limit counter: the grow check above guarantees _count + _tombstones < _capacity
         // (≤7/8 of bucketCount), so an empty group always exists — loop terminates.
         while (true)
         {
@@ -226,10 +276,12 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
             {
                 var bit = BitOperations.TrailingZeroCount(matchBits);
                 var idx = (pos + bit) & bucketMask;
-                if (Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in Unsafe.Add(ref slotBase, (nint)(uint)idx))))
+                if (KeyMode.Is<TMode>()
+                    ? Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in Unsafe.Add(ref slotBase, (nint)(uint)idx)))
+                    : probe.Matches(in Unsafe.Add(ref slotBase, (nint)(uint)idx)))
                 {
                     slotIdx = idx;
-                    return InsertAttempt.Duplicate;
+                    return false;
                 }
 
                 matchBits &= matchBits - 1;
@@ -260,13 +312,15 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
                     target = (pos + bit) & bucketMask;
                 }
 
+                // Build the slot before touching the table so a throwing CreateSlot leaves it intact.
+                var slot = KeyMode.Is<TMode>() ? newSlot : probe.CreateSlot();
                 SwissTableHelpers.WriteControl(
                     ref controlBase,
                     bucketCount,
                     target,
                     h2);
 
-                Unsafe.Add(ref slotBase, (nint)(uint)target) = newSlot;
+                Unsafe.Add(ref slotBase, (nint)(uint)target) = slot;
                 _count++;
                 if (insertionFromTombstone)
                 {
@@ -274,7 +328,7 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
                 }
 
                 slotIdx = target;
-                return InsertAttempt.Inserted;
+                return true;
             }
 
             jumpDistance += SwissTableHelpers.GroupWidth;
@@ -283,8 +337,13 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Remove<TExtractor>(TKey key)
+    bool RemoveCore<TMode, TExtractor, TProbe>(TKey key, TProbe probe, ref TSlot removed)
+        where TMode : struct
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>
+#if NET9_0_OR_GREATER
+        , allows ref struct
+#endif
     {
         var controls = _controls;
         if (controls is null)
@@ -298,7 +357,8 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
         var bucketCount = _bucketCount;
         var bucketMask = _bucketMask;
 
-        var hash = Unsafe.AsRef(in _finalizer).Finalize(Unsafe.AsRef(in _hasher).ComputeHash(key));
+        var hash = Unsafe.AsRef(in _finalizer).Finalize(
+            KeyMode.Is<TMode>() ? Unsafe.AsRef(in _hasher).ComputeHash(key) : probe.ComputeHash());
         var h2 = SwissTableHelpers.H2(hash);
         var pos = SwissTableHelpers.InitialPos(hash, bucketMask);
         var jumpDistance = 0;
@@ -313,8 +373,16 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
             {
                 var bit = BitOperations.TrailingZeroCount(matchBits);
                 var slotIdx = (pos + bit) & bucketMask;
-                if (Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in Unsafe.Add(ref slotBase, (nint)(uint)slotIdx))))
+                ref var slotRef = ref Unsafe.Add(ref slotBase, (nint)(uint)slotIdx);
+                if (KeyMode.Is<TMode>()
+                    ? Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in slotRef))
+                    : probe.Matches(in slotRef))
                 {
+                    if (!KeyMode.Is<TMode>())
+                    {
+                        removed = slotRef;
+                    }
+
                     var marker = SwissTableHelpers.MatchVector(group, SwissTableHelpers.EmptyVector) != 0 ? SwissTableHelpers.CtrlEmpty : SwissTableHelpers.CtrlDeleted;
                     SwissTableHelpers.WriteControl(
                         ref controlBase,
@@ -330,10 +398,10 @@ public struct SwissTableAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgor
 #if NET
                     if (RuntimeHelpers.IsReferenceOrContainsReferences<TSlot>())
                     {
-                        Unsafe.Add(ref slotBase, (nint)(uint)slotIdx) = default!;
+                        slotRef = default!;
                     }
 #else
-                    Unsafe.Add(ref slotBase, (nint)(uint)slotIdx) = default!;
+                    slotRef = default!;
 #endif
                     _count--;
                     return true;

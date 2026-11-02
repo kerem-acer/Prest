@@ -140,6 +140,60 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly ref readonly TSlot FindSlot<TExtractor>(TKey key)
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        => ref FindCore<KeyMode, TExtractor, NoProbe<TSlot>>(key, default);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Insert<TExtractor>(TKey key, TSlot newSlot, out int slotIdx)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        => InsertCore<KeyMode, TExtractor, NoProbe<TSlot>>(key, newSlot, default, out slotIdx);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Remove<TExtractor>(TKey key)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        => RemoveCore<KeyMode, TExtractor, NoProbe<TSlot>>(key, default, ref Unsafe.NullRef<TSlot>());
+
+#if NET9_0_OR_GREATER
+    public readonly IEqualityComparer<TKey>? Comparer => HasherComparer.Get<TKey, THasher>(in _hasher);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly ref readonly TSlot FindSlot<TExtractor, TProbe>(TProbe probe)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>, allows ref struct
+        => ref FindCore<ProbeMode, TExtractor, TProbe>(default!, probe);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Insert<TExtractor, TProbe>(TProbe probe, out int slotIdx)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IInsertProbe<TSlot>, allows ref struct
+        => InsertCore<ProbeMode, TExtractor, TProbe>(default!, default!, probe, out slotIdx);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool Remove<TExtractor, TProbe>(TProbe probe, out TSlot removed)
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>, allows ref struct
+    {
+        removed = default!;
+        return RemoveCore<ProbeMode, TExtractor, TProbe>(default!, probe, ref removed);
+    }
+#endif
+
+    // The loops below are shared by the key-based members above and the
+    // alternate-key (probe-based) members. TMode is KeyMode or ProbeMode, a
+    // JIT-time constant: KeyMode hashes and compares `key` with this algorithm's
+    // own hasher, exactly as before probes existed; ProbeMode asks `probe`. (A
+    // wrapper struct around the key would cost a real call per hash and per
+    // comparison in shared generic code, i.e. for reference-type keys.)
+    // RemoveCore copies the removed slot into `removed` only in ProbeMode; the
+    // key-based Remove has no use for it and passes a null ref.
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    readonly ref readonly TSlot FindCore<TMode, TExtractor, TProbe>(TKey key, TProbe probe)
+        where TMode : struct
+        where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>
+#if NET9_0_OR_GREATER
+        , allows ref struct
+#endif
     {
         var buckets = _buckets;
         if (buckets is null)
@@ -153,14 +207,17 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
         ref var entryBase = ref MemoryMarshal.GetArrayDataReference(entries);
         ref var nextBase = ref MemoryMarshal.GetArrayDataReference(nextIndex);
 
-        var hash = Unsafe.AsRef(in _finalizer).Finalize(Unsafe.AsRef(in _hasher).ComputeHash(key));
+        var hash = Unsafe.AsRef(in _finalizer).Finalize(
+            KeyMode.Is<TMode>() ? Unsafe.AsRef(in _hasher).ComputeHash(key) : probe.ComputeHash());
         var bucketIdx = (int)(hash & (uint)_bucketMask);
         var entryIdx = Unsafe.Add(ref bucketBase, (nint)(uint)bucketIdx);
 
         while (entryIdx != EndOfChain)
         {
             ref var entryRef = ref Unsafe.Add(ref entryBase, (nint)(uint)entryIdx);
-            if (Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in entryRef)))
+            if (KeyMode.Is<TMode>()
+                ? Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in entryRef))
+                : probe.Matches(in entryRef))
             {
                 return ref entryRef;
             }
@@ -170,8 +227,13 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Insert<TExtractor>(TKey key, TSlot newSlot, out int slotIdx)
+    bool InsertCore<TMode, TExtractor, TProbe>(TKey key, TSlot newSlot, TProbe probe, out int slotIdx)
+        where TMode : struct
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IInsertProbe<TSlot>
+#if NET9_0_OR_GREATER
+        , allows ref struct
+#endif
     {
         if (_count >= _capacity)
         {
@@ -182,7 +244,8 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
         var entries = _entries!;
         var nextIndex = _nextIndex!;
 
-        var hash = Unsafe.AsRef(in _finalizer).Finalize(Unsafe.AsRef(in _hasher).ComputeHash(key));
+        var hash = Unsafe.AsRef(in _finalizer).Finalize(
+            KeyMode.Is<TMode>() ? Unsafe.AsRef(in _hasher).ComputeHash(key) : probe.ComputeHash());
         var bucketIdx = (int)(hash & (uint)_bucketMask);
         var head = buckets[bucketIdx];
 
@@ -190,7 +253,9 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
         var cursor = head;
         while (cursor != EndOfChain)
         {
-            if (Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in entries[cursor])))
+            if (KeyMode.Is<TMode>()
+                ? Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in entries[cursor]))
+                : probe.Matches(in entries[cursor]))
             {
                 slotIdx = cursor;
                 return false;
@@ -200,7 +265,7 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
 
         // Append at _count, link into the chain as new head.
         var newIdx = _count;
-        entries[newIdx] = newSlot;
+        entries[newIdx] = KeyMode.Is<TMode>() ? newSlot : probe.CreateSlot();
         nextIndex[newIdx] = head;
         buckets[bucketIdx] = newIdx;
         _count++;
@@ -209,8 +274,13 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Remove<TExtractor>(TKey key)
+    bool RemoveCore<TMode, TExtractor, TProbe>(TKey key, TProbe probe, ref TSlot removed)
+        where TMode : struct
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>
+        where TProbe : struct, IHashProbe<TSlot>
+#if NET9_0_OR_GREATER
+        , allows ref struct
+#endif
     {
         var buckets = _buckets;
         if (buckets is null)
@@ -221,7 +291,8 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
         var entries = _entries!;
         var nextIndex = _nextIndex!;
 
-        var hash = Unsafe.AsRef(in _finalizer).Finalize(Unsafe.AsRef(in _hasher).ComputeHash(key));
+        var hash = Unsafe.AsRef(in _finalizer).Finalize(
+            KeyMode.Is<TMode>() ? Unsafe.AsRef(in _hasher).ComputeHash(key) : probe.ComputeHash());
         var bucketIdx = (int)(hash & (uint)_bucketMask);
 
         // Walk chain at bucketIdx, track predecessor for unlink.
@@ -229,7 +300,9 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
         var prev = EndOfChain;
         while (cursor != EndOfChain)
         {
-            if (Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in entries[cursor])))
+            if (KeyMode.Is<TMode>()
+                ? Unsafe.AsRef(in _hasher).Equals(key, default(TExtractor).Extract(in entries[cursor]))
+                : probe.Matches(in entries[cursor]))
             {
                 break;
             }
@@ -239,6 +312,11 @@ public struct ChainedAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgorith
         if (cursor == EndOfChain)
         {
             return false;
+        }
+
+        if (!KeyMode.Is<TMode>())
+        {
+            removed = entries[cursor];
         }
 
         // Unlink target from its chain.

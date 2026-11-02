@@ -23,7 +23,7 @@ namespace Prest;
 /// remove entries while enumerating — a grow returns the old buffers to the pool.
 /// </remarks>
 [DebuggerDisplay("Count = {Count}")]
-public class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TKey, TValue>, IDisposable
+public partial class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TKey, TValue>, IDisposable
     where TKey : notnull
     where TAlgo : struct, IHashAlgorithm<KeyValueSlot<TKey, TValue>, TKey>
 {

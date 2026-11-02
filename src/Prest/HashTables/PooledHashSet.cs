@@ -28,7 +28,7 @@ namespace Prest;
 /// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}")]
-public class PooledHashSet<T, TAlgo> : IReadOnlyCollection<T>, IDisposable
+public partial class PooledHashSet<T, TAlgo> : IReadOnlyCollection<T>, IDisposable
     where T : notnull
     where TAlgo : struct, IHashAlgorithm<T, T>
 {
