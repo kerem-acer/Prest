@@ -103,4 +103,39 @@ public class PooledHashPoolTests
 
         set.Dispose();
     }
+
+    [Test]
+    [NotInParallel("PooledHashMapPool<long,long>")]
+    public async Task HashMapPool_InstanceGivenToCoreReturn_StaysOutOfThreadCache()
+    {
+        // Arrange — the core per-thread cache only keeps instances its own Create hands out,
+        // so a pool instance can never end up with two owners.
+        _ = PooledHashMap<long, long>.Create();
+        var pooled = PooledHashMapPool<long, long>.Create();
+
+        // Act
+        PooledHashMap<long, long>.Return(pooled);
+        using var fromThreadCache = PooledHashMap<long, long>.Create();
+
+        // Assert
+        await Assert.That(fromThreadCache).IsNotSameReferenceAs(pooled);
+        await Assert.That(fromThreadCache.GetType()).IsEqualTo(typeof(PooledHashMap<long, long>));
+    }
+
+    [Test]
+    [NotInParallel("PooledHashSetPool<short>")]
+    public async Task HashSetPool_InstanceGivenToCoreReturn_StaysOutOfThreadCache()
+    {
+        // Arrange
+        _ = PooledHashSet<short>.Create();
+        var pooled = PooledHashSetPool<short>.Create();
+
+        // Act
+        PooledHashSet<short>.Return(pooled);
+        using var fromThreadCache = PooledHashSet<short>.Create();
+
+        // Assert
+        await Assert.That(fromThreadCache).IsNotSameReferenceAs(pooled);
+        await Assert.That(fromThreadCache.GetType()).IsEqualTo(typeof(PooledHashSet<short>));
+    }
 }
