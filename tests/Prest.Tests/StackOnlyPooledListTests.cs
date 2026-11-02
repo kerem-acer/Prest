@@ -1,6 +1,6 @@
 namespace Prest.Tests;
 
-public class StackOnlyPooledListTests
+public partial class StackOnlyPooledListTests
 {
     [Test]
     public async Task Add_SingleItem_CountIsOne()

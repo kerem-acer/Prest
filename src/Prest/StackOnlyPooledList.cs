@@ -70,6 +70,42 @@ public ref struct StackOnlyPooledList<T> : IDisposable
 #endif
     }
 
+    /// <summary>
+    /// Returns a writable span over the valid elements, <c>[0, Count)</c> — not the spare
+    /// capacity. Empty when <see cref="Count" /> is zero.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The writable counterpart of <see cref="Span" />, like
+    /// <c>CollectionsMarshal.AsSpan(List&lt;T&gt;)</c>. Writes go straight to the current
+    /// buffer (the inline buffer passed to the constructor, or the rented array once it has
+    /// overflowed), as they already do through the <c>ref</c> indexer and the enumerator's
+    /// <c>ref</c> <see cref="Enumerator.Current" />. Use it for in-place work the list has no
+    /// method for: <c>list.AsSpan().Sort(comparison)</c>, <c>Fill</c>, <c>CopyTo</c>,
+    /// vectorized loops.
+    /// </para>
+    /// <para>
+    /// <b>Invalidated by any call that changes <see cref="Count" /> or the buffer:</b>
+    /// <see cref="Add" />, <see cref="AddRange" />, <see cref="Clear" />, <see cref="Dispose" />,
+    /// <see cref="ToPooledArray" /> and <see cref="DetachArray" />. Do not hold the span
+    /// across them; call <see cref="AsSpan" /> again afterwards. A grow moves the elements to
+    /// a new rented array, so writes through a stale span are lost; once the old buffer was
+    /// itself rented, the grow (or <see cref="Dispose" />) has returned it to
+    /// <see cref="ArrayPool{T}.Shared" />, where unrelated code may already have rented it —
+    /// writing through a stale span then corrupts that code's data, which is worse than
+    /// reading stale values.
+    /// </para>
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public readonly Span<T> AsSpan()
+    {
+#if NET6_0_OR_GREATER
+        return MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(_span), Count);
+#else
+        return _span[..Count];
+#endif
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Add(T item)
     {
