@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,12 +14,25 @@ namespace Prest.Serializers.SystemTextJson;
 /// closure) are threaded through to the closed converter's generics.
 /// </summary>
 /// <remarks>
+/// <para>
+/// Alias types (<c>PooledHashMap&lt;K,V&gt;</c>, <c>SwissHashMap&lt;K,V&gt;</c>,
+/// <c>RobinHoodHashSet&lt;T,TFinalizer&gt;</c>, …) deserialize to the alias itself, built with
+/// the alias's own <c>Create(int)</c>. <c>Comparer*</c> aliases serialize normally, but reading
+/// one throws <see cref="NotSupportedException" /> because the comparer is not in the payload —
+/// register a <see cref="PooledHashMapAliasConverter{TMap,TKey,TValue,TAlgo}" /> /
+/// <see cref="PooledHashSetAliasConverter{TSet,T,TAlgo}" /> with a factory that supplies it,
+/// ahead of this factory.
+/// </para>
+/// <para>
 /// <b>Native AOT:</b> this factory uses <see cref="Type.MakeGenericType(Type[])" />
 /// and is therefore incompatible with AOT / trimmed deployments. Under AOT, register
 /// each concrete converter instead (see <c>PooledArrayConverter&lt;T&gt;</c>,
 /// <c>PooledListConverter&lt;T&gt;</c>, <c>PooledHashMapConverter&lt;K,V,TAlgo&gt;</c>,
-/// <c>PooledHashSetConverter&lt;T,TAlgo&gt;</c>) — each is itself AOT-safe when
+/// <c>PooledHashSetConverter&lt;T,TAlgo&gt;</c>, and for alias types
+/// <c>PooledHashMapAliasConverter&lt;TMap,K,V,TAlgo&gt;</c> /
+/// <c>PooledHashSetAliasConverter&lt;TSet,T,TAlgo&gt;</c>) — each is itself AOT-safe when
 /// closed over concrete generic arguments.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -50,18 +64,54 @@ public sealed class PooledTypesJsonConverterFactory : JsonConverterFactory
         if (MatchHashMapBase(typeToConvert) is { } mapBase)
         {
             var a = mapBase.GetGenericArguments();
-            var converterType = typeof(PooledHashMapConverter<,,>).MakeGenericType(a[0], a[1], a[2]);
-            return (JsonConverter)Activator.CreateInstance(converterType)!;
+            return typeToConvert == mapBase
+                ? (JsonConverter)Activator.CreateInstance(typeof(PooledHashMapConverter<,,>).MakeGenericType(a[0], a[1], a[2]))!
+                : CreateAliasConverter(
+                    typeof(PooledHashMapAliasConverter<,,,>).MakeGenericType(typeToConvert, a[0], a[1], a[2]),
+                    typeToConvert);
         }
 
         if (MatchHashSetBase(typeToConvert) is { } setBase)
         {
             var a = setBase.GetGenericArguments();
-            var converterType = typeof(PooledHashSetConverter<,>).MakeGenericType(a[0], a[1]);
-            return (JsonConverter)Activator.CreateInstance(converterType)!;
+            return typeToConvert == setBase
+                ? (JsonConverter)Activator.CreateInstance(typeof(PooledHashSetConverter<,>).MakeGenericType(a[0], a[1]))!
+                : CreateAliasConverter(
+                    typeof(PooledHashSetAliasConverter<,,>).MakeGenericType(typeToConvert, a[0], a[1]),
+                    typeToConvert);
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Builds the alias converter around the alias's own <c>Create(int)</c>. Types without a
+    /// usable one (the <c>Comparer*</c> aliases hide theirs behind <c>[Obsolete(error: true)]</c>
+    /// because they cannot know their comparer) get a converter that writes but throws
+    /// <see cref="NotSupportedException" /> on read.
+    /// </summary>
+    static JsonConverter CreateAliasConverter(Type converterType, Type aliasType) =>
+        FindCapacityFactory(aliasType) is { } create
+            ? (JsonConverter)Activator.CreateInstance(converterType, create)!
+            : (JsonConverter)Activator.CreateInstance(converterType, nonPublic: true)!;
+
+    /// <summary>
+    /// Returns the alias's public static <c>Create(int)</c> declared on the alias itself and
+    /// returning it, as a <c>Func&lt;int, TAlias&gt;</c>; null when there is none.
+    /// </summary>
+    static Delegate? FindCapacityFactory(Type aliasType)
+    {
+        var create = aliasType.GetMethod(
+            "Create",
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly,
+            binder: null,
+            [typeof(int)],
+            modifiers: null);
+        return create is null
+            || create.ReturnType != aliasType
+            || create.GetCustomAttribute<ObsoleteAttribute>() is { IsError: true }
+            ? null
+            : create.CreateDelegate(typeof(Func<,>).MakeGenericType(typeof(int), aliasType));
     }
 
     /// <summary>Returns (openDef, args) if <paramref name="t" /> is a closed <c>PooledArray&lt;&gt;</c> or <c>PooledList&lt;&gt;</c>; null otherwise.</summary>

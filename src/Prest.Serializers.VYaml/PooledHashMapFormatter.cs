@@ -5,7 +5,7 @@ using VYaml.Serialization;
 
 namespace Prest.Serializers.VYaml;
 
-public sealed class PooledHashMapFormatter<TKey, TValue, TAlgo> : IYamlFormatter<PooledHashMap<TKey, TValue, TAlgo>>
+public sealed class PooledHashMapFormatter<TKey, TValue, TAlgo> : IYamlFormatter<PooledHashMap<TKey, TValue, TAlgo>?>
     where TKey : notnull
     where TAlgo : struct, IHashAlgorithm<KeyValueSlot<TKey, TValue>, TKey>
 {
@@ -48,8 +48,14 @@ public sealed class PooledHashMapFormatter<TKey, TValue, TAlgo> : IYamlFormatter
         }
     }
 
-    public void Serialize(ref Utf8YamlEmitter emitter, PooledHashMap<TKey, TValue, TAlgo> value, YamlSerializationContext context)
+    public void Serialize(ref Utf8YamlEmitter emitter, PooledHashMap<TKey, TValue, TAlgo>? value, YamlSerializationContext context)
     {
+        if (value is null)
+        {
+            emitter.WriteNull();
+            return;
+        }
+
         emitter.BeginMapping();
         foreach (var kv in value)
         {
