@@ -2,7 +2,7 @@ using VYaml.Serialization;
 
 namespace Prest.Serializers.VYaml.Tests;
 
-public class FormatterRoundTripTests
+public partial class FormatterRoundTripTests
 {
     static YamlSerializerOptions Options()
     {

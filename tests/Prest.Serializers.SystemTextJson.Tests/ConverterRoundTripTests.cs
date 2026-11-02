@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace Prest.Serializers.SystemTextJson.Tests;
 
-public class ConverterRoundTripTests
+public partial class ConverterRoundTripTests
 {
     static JsonSerializerOptions Options()
     {
