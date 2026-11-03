@@ -29,7 +29,7 @@ public class FinalizerComparisonBenchmarks
             _keys[i] = i;
         }
 
-        _swissIdentity = PooledHashMap<int, int>.Create(N);
+        _swissIdentity = SwissHashMap<int, int>.Create(N);
         _swissLowbias = SwissHashMap<int, int, Lowbias32Finalizer>.Create(N);
         _swissFib = SwissHashMap<int, int, FibonacciFinalizer>.Create(N);
         _swissXmx = SwissHashMap<int, int, XmxFinalizer>.Create(N);

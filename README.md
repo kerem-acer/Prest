@@ -86,7 +86,7 @@ Console.WriteLine($"ContainsKey(1): {map.ContainsKey(1)}");  // False
 
 ### Hash map / hash set
 
-The default `PooledHashMap<K,V>` / `PooledHashSet<T>` close over SwissTable — the same algorithm .NET 9's `Dictionary` moved to, chosen as a reasonable starting point for mixed workloads. `Create(capacity)` rents from a per-thread cache, `Dispose` returns to it. See [**Choosing an algorithm**](#choosing-an-algorithm) for when to pick a different one.
+The default `PooledHashMap<K,V>` / `PooledHashSet<T>` close over SwissTable — the same algorithm .NET 9's `Dictionary` moved to, chosen as a reasonable starting point for mixed workloads. Like `Dictionary`, they take an optional comparer (see [**Custom equality comparer**](#custom-equality-comparer)). `Create(capacity)` rents from a per-thread cache, `Dispose` returns to it. See [**Choosing an algorithm**](#choosing-an-algorithm) for when to pick a different one.
 
 ```csharp
 using var map = PooledHashMap<int, string>.Create(capacity: 16);
@@ -143,7 +143,7 @@ using var linear = LinearHashMap<int, int>.Create(32);
 using var chain  = ChainedHashMap<int, int>.Create(32);
 ```
 
-`PooledHashMap<K,V>` and `SwissHashMap<K,V>` are the same configuration; `SwissHashMap<K,V>` derives from `PooledHashMap<K,V>`, so it can be passed wherever a `PooledHashMap<K,V>` is expected. See [**Choosing an algorithm**](#choosing-an-algorithm) below.
+`PooledHashMap<K,V>` and `SwissHashMap<K,V>` both use SwissTable, but they are separate types. `PooledHashMap<K,V>` takes an optional comparer, so every hash and equality check first tests whether it has one. `SwissHashMap<K,V>` takes no comparer and skips that test, which matters for integer keys: on ARM64, int-key hits measured 29–39% faster and misses 4–15% faster. For string keys the difference is small next to hashing the string (0–12%). See [**Choosing an algorithm**](#choosing-an-algorithm) below.
 
 Each algorithm comes in five shapes (sets mirror maps, with `T` in place of `K,V`):
 
@@ -159,9 +159,12 @@ Each algorithm comes in five shapes (sets mirror maps, with `T` in place of `K,V
 
 ### Custom equality comparer
 
-Each algorithm ships a `Comparer{Algo}HashMap<K,V>` / `Comparer{Algo}HashSet<T>` variant that takes a runtime `IEqualityComparer<T>`:
+The default `PooledHashMap<K,V>` / `PooledHashSet<T>` take a runtime `IEqualityComparer<T>` the way `Dictionary` does. Each algorithm also ships a `Comparer{Algo}HashMap<K,V>` / `Comparer{Algo}HashSet<T>` variant for a comparer with a specific algorithm or finalizer:
 
 ```csharp
+using var byName = PooledHashMap<string, int>.Create(StringComparer.OrdinalIgnoreCase);
+using PooledHashSet<string> seen = [with(StringComparer.OrdinalIgnoreCase)];
+
 using var map = ComparerSwissHashMap<string, int>.Create(
     StringComparer.OrdinalIgnoreCase, capacity: 8);
 
@@ -179,10 +182,11 @@ using ComparerSwissHashSet<string> words =
     [with(StringComparer.OrdinalIgnoreCase, 16), "Hello", "HELLO"];  // 1 item
 ```
 
-- `Create(comparer)` or `[with(comparer), ...]` creates one. Without a comparer (`Create()`, `Create(capacity)`, `[]`, `[with(capacity)]`) it's a compile error on these aliases. Passing `null` uses `EqualityComparer<T>.Default`.
-- `PooledHashMap<K,V>` and the `{Algo}HashMap<K,V>` / `{Algo}HashMap<K,V,TFinalizer>` aliases (and their sets) always use `EqualityComparer<T>.Default`. `Create(comparer)` or `[with(comparer)]` on them is a compile error that names the `Comparer{Algo}` alias to use.
+- On `PooledHashMap<K,V>` / `PooledHashSet<T>` the comparer is optional: `Create()`, `[]` and `Create(null)` use `EqualityComparer<T>.Default`.
+- On the `Comparer*` aliases, `Create(comparer)` or `[with(comparer), ...]` creates one. Without a comparer (`Create()`, `Create(capacity)`, `[]`, `[with(capacity)]`) it's a compile error on these aliases. Passing `null` uses `EqualityComparer<T>.Default`.
+- The `{Algo}HashMap<K,V>` / `{Algo}HashMap<K,V,TFinalizer>` aliases (and their sets) always use `EqualityComparer<T>.Default`. `Create(comparer)` or `[with(comparer)]` on them is a compile error that names the type to declare instead.
 - `Comparer` returns the comparer the map or set uses.
-- The per-thread cache only hands a disposed instance back to a `Create` call with the **same comparer instance** (reference equality — singletons like `StringComparer.OrdinalIgnoreCase` qualify). A different comparer gets a new instance.
+- The per-thread cache only hands a disposed instance back to a `Create` call with the **same comparer instance** (reference equality — singletons like `StringComparer.OrdinalIgnoreCase` qualify). A different comparer gets a new instance. This applies to `PooledHashMap<K,V>` / `PooledHashSet<T>` too.
 
 ### Custom hash finalizer
 
@@ -245,7 +249,7 @@ lookup.TryAdd("pear".AsSpan(), 2);        // creates the "pear" string, because 
 lookup.Remove(name);
 ```
 
-The lookup has `TryGetValue` (also with the stored key), `ContainsKey`, the indexer getter, `TryAdd` and `Remove`. Sets have one too, with `Add`, `Contains`, `Remove` and `TryGetValue`. It works with the default hasher and with any comparer that implements `IAlternateEqualityComparer<TAlternate, TKey>`. All the built-in `StringComparer`s do, so `ComparerSwissHashMap<string, int>.Create(StringComparer.OrdinalIgnoreCase)` supports span lookups as well. If the comparer doesn't, `GetAlternateLookup` throws `InvalidOperationException` and `TryGetAlternateLookup` returns `false`. As with `Dictionary`, each hash or equality check is one interface call to the comparer.
+The lookup has `TryGetValue` (also with the stored key), `ContainsKey`, the indexer getter, `TryAdd` and `Remove`. Sets have one too, with `Add`, `Contains`, `Remove` and `TryGetValue`. It works with the default hasher and with any comparer that implements `IAlternateEqualityComparer<TAlternate, TKey>`. All the built-in `StringComparer`s do, so `PooledHashMap<string, int>.Create(StringComparer.OrdinalIgnoreCase)` supports span lookups as well. If the comparer doesn't, `GetAlternateLookup` throws `InvalidOperationException` and `TryGetAlternateLookup` returns `false`. As with `Dictionary`, each hash or equality check is one interface call to the comparer.
 
 To skip those calls, or to look up by a type no comparer supports, pass a struct `IAlternateHasher<TAlternate, TKey>` and the JIT specializes the lookup for it. This one finds `string` keys by their UTF-8 bytes in a default map:
 
@@ -382,10 +386,13 @@ foreach (var id in ids)
     }
 }
 
+// The defaults take an optional comparer, like PooledHashMap<K,V>.
+using var ignoreCase = new StackOnlyPooledHashMap<string, int>(16, StringComparer.OrdinalIgnoreCase);
+
 // The generic form takes any algorithm; pass it in when the hasher has state.
-using var ignoreCase = new StackOnlyPooledHashMap<string, int,
-    SwissTableAlgorithm<KeyValueSlot<string, int>, string, ComparerHasher<string>, NoOpHashFinalizer>>(
-    16, new(new ComparerHasher<string>(StringComparer.OrdinalIgnoreCase), default));
+using var robin = new StackOnlyPooledHashMap<string, int,
+    RobinHoodAlgorithm<KeyValueSlot<string, int>, string, ComparerHasher<string>, NoOpHashFinalizer>>(
+    16, new(new ComparerHasher<string>(StringComparer.Ordinal), default));
 ```
 
 Pick them over `PooledHashMap` / `PooledHashSet` for maps that live and die inside one synchronous method: nothing is allocated even when several are alive at once (the class's per-thread cache holds one instance per type), and there is no cache to return to. Pick the class types when the map has to cross an `await`, live in a field, be captured by a lambda, or be handed out as `IReadOnlyDictionary<K,V>` / `IReadOnlyCollection<T>` — a ref struct can do none of these. The saving is allocations, not time: renting and returning the arrays on every use costs about as much as reusing a cached `PooledHashMap`, and somewhat more for very small maps (`StackOnlyPooledHashMapBenchmarks.cs`).
@@ -541,7 +548,7 @@ using var back = PooledArray.FromImmutableArray(immutable);
 
 **Quick rule of thumb:**
 
-- Start with the default Swiss. It is within a few percent of `Dictionary` on lookup workloads and roughly 10–20% faster than `Dictionary` on `Add` (thanks to pooled arrays — no allocation).
+- Start with the default `PooledHashMap<K,V>` (Swiss, optional comparer). For integer-keyed hot paths, use `SwissHashMap<K,V>`: the same algorithm without the comparer check. It is within a few percent of `Dictionary` on lookup workloads and roughly 10–20% faster than `Dictionary` on `Add` (thanks to pooled arrays — no allocation). The comparer check made `PooledHashMap<int, int>` hits 29–39% slower than `SwissHashMap<int, int>` on ARM64.
 - If you do heavy add/remove churn on `int`/`long` keys, switch to `RobinHood` **or** keep Swiss and pair it with `FibonacciFinalizer`. Sequential or tightly-packed integer keys combined with identity hashing + tombstones is the one workload where Swiss can regress badly.
 - If your app is read-mostly and iterates maps often, `Chained` gives you the densest enumeration path.
 

@@ -19,7 +19,7 @@ namespace Prest;
 /// Use <c>using var set = new StackOnlyPooledHashSet&lt;T, TAlgo&gt;(16);</c> so
 /// <see cref="Dispose" /> returns the buffers to <see cref="ArrayPool{T}.Shared" />. <c>default</c>
 /// and <c>new()</c> are empty sets that rent on the first add. For the default configuration
-/// (SwissTable, <see cref="EqualityDefaultHasher{T}" />, <see cref="NoOpHashFinalizer" />) use
+/// (SwissTable with an optional comparer, like <see cref="PooledHashSet{T}" />) use
 /// <see cref="StackOnlyPooledHashSet{T}" />.
 /// </para>
 /// <para>
@@ -159,8 +159,8 @@ public ref struct StackOnlyPooledHashSet<T, TAlgo> : IDisposable
 }
 
 /// <summary>
-/// Default stack-only pooled hash set — SwissTable + <see cref="EqualityDefaultHasher{T}" /> +
-/// <see cref="NoOpHashFinalizer" />, the same configuration as <see cref="PooledHashSet{T}" />.
+/// Default stack-only pooled hash set — SwissTable with <see cref="EqualityComparer{T}.Default" />
+/// or a comparer you pass, the same configuration as <see cref="PooledHashSet{T}" />.
 /// Compiler-enforced single-consumer: cannot be stored in a field, boxed, or captured across
 /// <c>await</c>.
 /// </summary>
@@ -186,13 +186,33 @@ public ref struct StackOnlyPooledHashSet<T> : IDisposable
 {
     // The default configuration is spelled out here only. The enumerator type below is named
     // through PooledHashSet<T>, so the two defaults cannot drift apart without a compile error.
-    StackOnlyPooledHashSet<T, SwissTableAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>> _set;
+    StackOnlyPooledHashSet<T, SwissTableAlgorithm<T, T, OptionalComparerHasher<T>, NoOpHashFinalizer>> _set;
+
+    // Null means EqualityComparer<T>.Default (OptionalComparerHasher.Normalize).
+    readonly IEqualityComparer<T>? _comparer;
 
     /// <summary>
     /// Creates a set with at least <paramref name="capacity" /> slots pre-allocated. A capacity
     /// of zero or less defers renting to the first add.
     /// </summary>
-    public StackOnlyPooledHashSet(int capacity) => _set = new(capacity);
+    public StackOnlyPooledHashSet(int capacity) : this(capacity, null) { }
+
+    /// <summary>
+    /// Creates a set that uses <paramref name="comparer" /> for equality (<see langword="null" />
+    /// means <see cref="EqualityComparer{T}.Default" />), with at least <paramref name="capacity" />
+    /// slots pre-allocated.
+    /// </summary>
+    public StackOnlyPooledHashSet(int capacity, IEqualityComparer<T>? comparer)
+    {
+        _comparer = OptionalComparerHasher<T>.Normalize(comparer);
+        _set = new(capacity, new(new OptionalComparerHasher<T>(_comparer), default));
+    }
+
+    /// <summary>
+    /// The comparer this set uses for hashing and equality: the one passed to the constructor, or
+    /// <see cref="EqualityComparer{T}.Default" />.
+    /// </summary>
+    public readonly IEqualityComparer<T> Comparer => _comparer ?? EqualityComparer<T>.Default;
 
     /// <inheritdoc cref="StackOnlyPooledHashSet{T,TAlgo}.Count" />
     public readonly int Count

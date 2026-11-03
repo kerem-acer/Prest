@@ -42,17 +42,19 @@ public static class PooledHashSetCollectionBuilder
         return set;
     }
 
-    /// <summary>Not supported — <see cref="PooledHashSet{T}" /> always uses the default comparer.</summary>
-    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
+    /// <summary>Builds a <see cref="PooledHashSet{T}" /> that uses <paramref name="comparer" />: <c>[with(comparer), a, b]</c>.</summary>
     public static PooledHashSet<T> Create<T>(IEqualityComparer<T>? comparer, ReadOnlySpan<T> items)
         where T : notnull
-        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+        => Create(comparer, 0, items);
 
-    /// <summary>Not supported — <see cref="PooledHashSet{T}" /> always uses the default comparer.</summary>
-    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
+    /// <summary>Builds a <see cref="PooledHashSet{T}" /> that uses <paramref name="comparer" />, pre-sized for <paramref name="capacity" /> items: <c>[with(comparer, capacity), a, b]</c>.</summary>
     public static PooledHashSet<T> Create<T>(IEqualityComparer<T>? comparer, int capacity, ReadOnlySpan<T> items)
         where T : notnull
-        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+    {
+        var set = PooledHashSet<T>.Create(comparer, Math.Max(capacity, items.Length));
+        AddAll(set, items);
+        return set;
+    }
 
     // ---- SwissHashSet ----
 

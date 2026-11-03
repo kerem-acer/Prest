@@ -206,7 +206,7 @@ public class DefaultTypeAliasesTests
         using var derived = PooledHashMap<int, int>.Create(4);
 
         // Act
-        PooledHashMap<int, int, SwissTableAlgorithm<KeyValueSlot<int, int>, int, EqualityDefaultHasher<int>, NoOpHashFinalizer>> baseRef = derived;
+        PooledHashMap<int, int, SwissTableAlgorithm<KeyValueSlot<int, int>, int, OptionalComparerHasher<int>, NoOpHashFinalizer>> baseRef = derived;
 
         // Assert
         await Assert.That(baseRef).IsNotNull();

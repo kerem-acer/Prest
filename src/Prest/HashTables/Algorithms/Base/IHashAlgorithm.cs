@@ -55,7 +55,8 @@ public interface IHashAlgorithm<TSlot, in TKey> : IDisposable
     /// <summary>
     /// The <see cref="IEqualityComparer{T}" /> behind this algorithm's hasher:
     /// <see cref="EqualityComparer{T}.Default" /> for <see cref="EqualityDefaultHasher{T}" />, the
-    /// wrapped comparer for <see cref="ComparerHasher{T}" />, or <see langword="null" /> for a hasher
+    /// wrapped comparer for <see cref="ComparerHasher{T}" /> and <see cref="OptionalComparerHasher{T}" />
+    /// (or the default when it has none), or <see langword="null" /> for a hasher
     /// that does not wrap one. <c>GetAlternateLookup&lt;TAlternate&gt;()</c> checks it for
     /// <see cref="IAlternateEqualityComparer{TAlternate,T}" />.
     /// </summary>

@@ -9,12 +9,13 @@ namespace Prest;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each method rents through the alias's <c>Create</c>, so the per-thread cache applies (and, on the
-/// <c>Comparer*</c> aliases, the same-comparer rule). The leading parameters bind to C# 15
-/// <c>with(...)</c> arguments: <c>[with(capacity), ...]</c> on every alias, and <c>[with(comparer), ...]</c>
-/// or <c>[with(comparer, capacity), ...]</c> on the <c>Comparer*</c> aliases. The map is pre-sized
-/// for the larger of the capacity and the element count; as with <c>Create(capacity)</c>, a cached
-/// instance is reused at its current size.
+/// Each method rents through the alias's <c>Create</c>, so the per-thread cache applies (and, on
+/// <c>PooledHashMap&lt;K,V&gt;</c> and the <c>Comparer*</c> aliases, the same-comparer rule). The
+/// leading parameters bind to C# 15 <c>with(...)</c> arguments: <c>[with(capacity), ...]</c> on every
+/// alias, and <c>[with(comparer), ...]</c> or <c>[with(comparer, capacity), ...]</c> on
+/// <c>PooledHashMap&lt;K,V&gt;</c> and the <c>Comparer*</c> aliases. The map is pre-sized for the
+/// larger of the capacity and the element count; as with <c>Create(capacity)</c>, a cached instance
+/// is reused at its current size.
 /// </para>
 /// <para>When a key appears more than once, the last entry wins.</para>
 /// <para>
@@ -42,17 +43,19 @@ public static class PooledHashMapCollectionBuilder
         return map;
     }
 
-    /// <summary>Not supported — <see cref="PooledHashMap{TKey,TValue}" /> always uses the default comparer.</summary>
-    [Obsolete(AliasErrors.PooledHashMapUsesDefaultComparer, error: true)]
+    /// <summary>Builds a <see cref="PooledHashMap{TKey,TValue}" /> that uses <paramref name="comparer" />: <c>[with(comparer), a, b]</c>.</summary>
     public static PooledHashMap<TKey, TValue> Create<TKey, TValue>(IEqualityComparer<TKey>? comparer, ReadOnlySpan<KeyValuePair<TKey, TValue>> items)
         where TKey : notnull
-        => throw AliasErrors.NotSupported(AliasErrors.PooledHashMapUsesDefaultComparer);
+        => Create(comparer, 0, items);
 
-    /// <summary>Not supported — <see cref="PooledHashMap{TKey,TValue}" /> always uses the default comparer.</summary>
-    [Obsolete(AliasErrors.PooledHashMapUsesDefaultComparer, error: true)]
+    /// <summary>Builds a <see cref="PooledHashMap{TKey,TValue}" /> that uses <paramref name="comparer" />, pre-sized for <paramref name="capacity" /> entries: <c>[with(comparer, capacity), a, b]</c>.</summary>
     public static PooledHashMap<TKey, TValue> Create<TKey, TValue>(IEqualityComparer<TKey>? comparer, int capacity, ReadOnlySpan<KeyValuePair<TKey, TValue>> items)
         where TKey : notnull
-        => throw AliasErrors.NotSupported(AliasErrors.PooledHashMapUsesDefaultComparer);
+    {
+        var map = PooledHashMap<TKey, TValue>.Create(comparer, Math.Max(capacity, items.Length));
+        AddOrReplace(map, items);
+        return map;
+    }
 
     // ---- SwissHashMap ----
 

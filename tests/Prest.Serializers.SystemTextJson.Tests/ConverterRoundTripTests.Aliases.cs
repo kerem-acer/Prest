@@ -14,7 +14,7 @@ public partial class ConverterRoundTripTests
         var options = new JsonSerializerOptions();
         options.Converters.Add(new PooledHashMapAliasConverter<
             PooledHashMap<string, int>, string, int,
-            SwissTableAlgorithm<KeyValueSlot<string, int>, string, EqualityDefaultHasher<string>, NoOpHashFinalizer>>(
+            SwissTableAlgorithm<KeyValueSlot<string, int>, string, OptionalComparerHasher<string>, NoOpHashFinalizer>>(
             PooledHashMap<string, int>.Create));
         options.Converters.Add(new PooledHashSetAliasConverter<
             SwissHashSet<string>, string,
@@ -70,7 +70,7 @@ public partial class ConverterRoundTripTests
         // Act & Assert
         await Assert.That(() => _ = new PooledHashMapAliasConverter<
             PooledHashMap<string, int>, string, int,
-            SwissTableAlgorithm<KeyValueSlot<string, int>, string, EqualityDefaultHasher<string>, NoOpHashFinalizer>>(create))
+            SwissTableAlgorithm<KeyValueSlot<string, int>, string, OptionalComparerHasher<string>, NoOpHashFinalizer>>(create))
             .ThrowsExactly<ArgumentNullException>();
     }
 }

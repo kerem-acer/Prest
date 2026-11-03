@@ -32,7 +32,7 @@ public class PooledHashMapStringBenchmarks
         }
 
         _dict = new Dictionary<string, int>(N);
-        _pooled = PooledHashMap<string, int>.Create(N);
+        _pooled = SwissHashMap<string, int>.Create(N);
         _dense = new DenseMap<string, int>((uint)N);
         for (var i = 0; i < N; i++)
         {
@@ -156,7 +156,7 @@ public class PooledHashMapStringBenchmarks
     [Benchmark(Description = "PooledHashMap.Add (from empty)")]
     public int PooledHashMap_Add()
     {
-        using var map = PooledHashMap<string, int>.Create(N);
+        using var map = SwissHashMap<string, int>.Create(N);
         var keys = _presentKeys;
         for (var i = 0; i < keys.Length; i++)
         {

@@ -114,11 +114,10 @@ public partial class PooledHashMapTests
         fields.RobinHood.Add(Key, Value);
         fields.IgnoreCase.Add(Key, Value);
         fields.LastDigit.Add(Value, Value);
-        var swissSeenAsDefault = CountThroughDefaultAlias(fields.Swiss);
 
         // Assert
         await Assert.That(fields.Default[Key]).IsEqualTo(Value);
-        await Assert.That(swissSeenAsDefault).IsEqualTo(1);
+        await Assert.That(fields.Swiss[Key]).IsEqualTo(Value);
         await Assert.That(fields.RobinHood[Key]).IsEqualTo(Value);
         await Assert.That(fields.IgnoreCase[OtherCaseKey]).IsEqualTo(Value);
         await Assert.That(fields.LastDigit.ContainsKey(Value + 10)).IsTrue();
@@ -333,8 +332,6 @@ public partial class PooledHashMapTests
             return (added, map[otherSameDigitKey], map.Count);
         }
     }
-
-    static int CountThroughDefaultAlias(PooledHashMap<string, int> map) => map.Count;
 
     // Fields declared with the short alias types, initialized straight from their Create.
     sealed class AliasFields : IDisposable
