@@ -74,8 +74,9 @@ public partial class PooledHashSet<T, TAlgo>
         where TAltHasher : struct, IAlternateHasher<TAlternate, T>
         => new(this, hasher);
 
+    /// <summary>Shared with <see cref="StackOnlyPooledHashSet{T,TAlgo}" />.</summary>
     [DoesNotReturn]
-    static void ThrowIncompatibleComparer(Type alternateType) =>
+    internal static void ThrowIncompatibleComparer(Type alternateType) =>
         throw new InvalidOperationException(
             $"The set's comparer does not implement IAlternateEqualityComparer<{alternateType.Name}, {typeof(T).Name}>. " +
             "Use a comparer that does, or pass an IAlternateHasher to GetAlternateLookup<TAlternate, TAltHasher>().");
@@ -184,7 +185,8 @@ public partial class PooledHashSet<T, TAlgo>
         }
     }
 
-    readonly ref struct AlternateProbe<TAlternate, TAltHasher> : IHashProbe<T>
+    /// <summary>Probe for a lookup by alternate item. Shared with <see cref="StackOnlyPooledHashSet{T,TAlgo}" />.</summary>
+    internal readonly ref struct AlternateProbe<TAlternate, TAltHasher> : IHashProbe<T>
         where TAlternate : notnull, allows ref struct
         where TAltHasher : struct, IAlternateHasher<TAlternate, T>
     {
@@ -205,7 +207,8 @@ public partial class PooledHashSet<T, TAlgo>
         public bool Matches(in T slot) => Unsafe.AsRef(in _hasher).Equals(_item, slot);
     }
 
-    readonly ref struct AlternateInsertProbe<TAlternate, TAltHasher> : IInsertProbe<T>
+    /// <summary>Probe for an add by alternate item. Shared with <see cref="StackOnlyPooledHashSet{T,TAlgo}" />.</summary>
+    internal readonly ref struct AlternateInsertProbe<TAlternate, TAltHasher> : IInsertProbe<T>
         where TAlternate : notnull, allows ref struct
         where TAltHasher : struct, IAlternateHasher<TAlternate, T>
     {

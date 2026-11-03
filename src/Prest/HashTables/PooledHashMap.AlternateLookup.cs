@@ -74,8 +74,9 @@ public partial class PooledHashMap<TKey, TValue, TAlgo>
         where TAltHasher : struct, IAlternateHasher<TAlternate, TKey>
         => new(this, hasher);
 
+    /// <summary>Shared with <see cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}" />.</summary>
     [DoesNotReturn]
-    static void ThrowIncompatibleComparer(Type alternateType) =>
+    internal static void ThrowIncompatibleComparer(Type alternateType) =>
         throw new InvalidOperationException(
             $"The map's comparer does not implement IAlternateEqualityComparer<{alternateType.Name}, {typeof(TKey).Name}>. " +
             "Use a comparer that does, or pass an IAlternateHasher to GetAlternateLookup<TAlternate, TAltHasher>().");
@@ -278,7 +279,8 @@ public partial class PooledHashMap<TKey, TValue, TAlgo>
         }
     }
 
-    readonly ref struct AlternateProbe<TAlternate, TAltHasher> : IHashProbe<KeyValueSlot<TKey, TValue>>
+    /// <summary>Probe for a lookup by alternate key. Shared with <see cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}" />.</summary>
+    internal readonly ref struct AlternateProbe<TAlternate, TAltHasher> : IHashProbe<KeyValueSlot<TKey, TValue>>
         where TAlternate : notnull, allows ref struct
         where TAltHasher : struct, IAlternateHasher<TAlternate, TKey>
     {
@@ -299,7 +301,8 @@ public partial class PooledHashMap<TKey, TValue, TAlgo>
         public bool Matches(in KeyValueSlot<TKey, TValue> slot) => Unsafe.AsRef(in _hasher).Equals(_key, slot.Key);
     }
 
-    readonly ref struct AlternateInsertProbe<TAlternate, TAltHasher> : IInsertProbe<KeyValueSlot<TKey, TValue>>
+    /// <summary>Probe for an add by alternate key. Shared with <see cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}" />.</summary>
+    internal readonly ref struct AlternateInsertProbe<TAlternate, TAltHasher> : IInsertProbe<KeyValueSlot<TKey, TValue>>
         where TAlternate : notnull, allows ref struct
         where TAltHasher : struct, IAlternateHasher<TAlternate, TKey>
     {

@@ -60,6 +60,34 @@ sealed class CountingSpanComparer : IEqualityComparer<string>, IAlternateEqualit
     }
 }
 
+/// <summary>
+/// Compares <see cref="ReadOnlyMemory{T}" /> keys by their bytes and finds them by a
+/// <see cref="ReadOnlySpan{T}" /> of the same bytes. Counts how many keys it creates.
+/// </summary>
+sealed class ByteContentComparer : IEqualityComparer<ReadOnlyMemory<byte>>, IAlternateEqualityComparer<ReadOnlySpan<byte>, ReadOnlyMemory<byte>>
+{
+    public int CreateCount { get; private set; }
+
+    public bool Equals(ReadOnlyMemory<byte> x, ReadOnlyMemory<byte> y) => x.Span.SequenceEqual(y.Span);
+
+    public int GetHashCode(ReadOnlyMemory<byte> obj) => GetHashCode(obj.Span);
+
+    public bool Equals(ReadOnlySpan<byte> alternate, ReadOnlyMemory<byte> other) => alternate.SequenceEqual(other.Span);
+
+    public int GetHashCode(ReadOnlySpan<byte> alternate)
+    {
+        var hash = new HashCode();
+        hash.AddBytes(alternate);
+        return hash.ToHashCode();
+    }
+
+    public ReadOnlyMemory<byte> Create(ReadOnlySpan<byte> alternate)
+    {
+        CreateCount++;
+        return alternate.ToArray();
+    }
+}
+
 /// <summary>Ordinal string comparer that does not implement <see cref="IAlternateEqualityComparer{TAlternate,T}" />.</summary>
 sealed class NoAlternateComparer : IEqualityComparer<string>
 {
