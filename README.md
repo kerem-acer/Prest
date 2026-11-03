@@ -312,6 +312,49 @@ using var undo = new PooledStack<EditCommand>();
 undo.Push(command);
 ```
 
+### Stack-only hash maps and sets
+
+`StackOnlyPooledHashMap<K,V>` and `StackOnlyPooledHashSet<T>` are `ref struct` versions of the default map and set (SwissTable, default equality, same API core). The table lives inline in the struct, so there is no class instance and no per-thread cache; `Dispose` returns the arrays to `ArrayPool<T>.Shared`. `default` and `new()` rent on the first add.
+
+```csharp
+// A temporary index inside one method.
+using var firstSeen = new StackOnlyPooledHashMap<string, int>(16);
+for (var i = 0; i < words.Length; i++)
+{
+    firstSeen.TryAdd(words[i], i); // keeps the first position of each word
+}
+
+using var seen = new StackOnlyPooledHashSet<int>();
+foreach (var id in ids)
+{
+    if (!seen.Add(id))
+    {
+        Console.WriteLine($"duplicate {id}");
+    }
+}
+
+// The generic form takes any algorithm; pass it in when the hasher has state.
+using var ignoreCase = new StackOnlyPooledHashMap<string, int,
+    SwissTableAlgorithm<KeyValueSlot<string, int>, string, ComparerHasher<string>, NoOpHashFinalizer>>(
+    16, new(new ComparerHasher<string>(StringComparer.OrdinalIgnoreCase), default));
+```
+
+Pick them over `PooledHashMap` / `PooledHashSet` for maps that live and die inside one synchronous method: nothing is allocated even when several are alive at once (the class's per-thread cache holds one instance per type), and there is no cache to return to. Pick the class types when the map has to cross an `await`, live in a field, be captured by a lambda, or be handed out as `IReadOnlyDictionary<K,V>` / `IReadOnlyCollection<T>` — a ref struct can do none of these. The saving is allocations, not time: renting and returning the arrays on every use costs about as much as reusing a cached `PooledHashMap`, and somewhat more for very small maps (`StackOnlyPooledHashMapBenchmarks.cs`).
+
+Don't copy one: `var b = a;` gives two tables over the same arrays with separate counts, and disposing both returns the arrays twice. Pass it to helpers by `ref` (not `in`, which mutates a hidden copy). A `using var` local can't be passed by `ref`, so dispose in `finally` there:
+
+```csharp
+var map = new StackOnlyPooledHashMap<int, int>();
+try
+{
+    Fill(ref map);
+}
+finally
+{
+    map.Dispose();
+}
+```
+
 ### `IBufferWriter<T>`
 
 Same-thread reuse via a threadstatic cache:
@@ -497,6 +540,7 @@ dotnet run --project examples/Prest.Examples -c Release
 - `AlternateLookupBenchmarks.cs` — `ReadOnlySpan<char>` and UTF-8 lookups on `string`-keyed maps vs `Dictionary.GetAlternateLookup`, through the comparer and through a struct hasher.
 - `FinalizerComparisonBenchmarks.cs` — `NoOp` / `Fibonacci` / `Lowbias32` / `XMX` on Swiss and RobinHood with sequential-int keys.
 - `PooledStackBenchmarks.cs` — `PooledStack<int>` and `StackOnlyPooledStack<int>` vs `Stack<int>`: push N then pop N, on a fresh stack per call and on a reused one, at N ∈ {16, 256, 4096}.
+- `StackOnlyPooledHashMapBenchmarks.cs` — `StackOnlyPooledHashMap<int,int>` and `PooledHashMap<int,int>.Create` vs `Dictionary<int,int>` as a method-local dedup index, with one map alive and with two alive at once, at N ∈ {16, 256, 4096}.
 
 Latest results are committed under [`benchmarks/artifacts/results/`](./benchmarks/artifacts/results) (`-report-github.md` files render directly on GitHub).
 

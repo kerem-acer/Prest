@@ -27,7 +27,8 @@ public partial class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TK
     where TKey : notnull
     where TAlgo : struct, IHashAlgorithm<KeyValueSlot<TKey, TValue>, TKey>
 {
-    readonly struct Extractor : ISlotKeyExtractor<KeyValueSlot<TKey, TValue>, TKey>
+    /// <summary>Reads the key out of a slot. Shared with <see cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}" />.</summary>
+    internal readonly struct Extractor : ISlotKeyExtractor<KeyValueSlot<TKey, TValue>, TKey>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public TKey Extract(in KeyValueSlot<TKey, TValue> slot) => slot.Key;
@@ -226,17 +227,28 @@ public partial class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TK
 
     public virtual void Dispose()
     {
-        if (_algo.IsAllocated
+        DisposeEntries(ref _algo);
+        ReturnToCache();
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Disposes every live key and value whose type implements <see cref="IDisposable" />.
+    /// Leaves the buffers rented. Shared with <see cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}" />.
+    /// </summary>
+    internal static void DisposeEntries(ref TAlgo algo)
+    {
+        if (algo.IsAllocated
             && (typeof(IDisposable).IsAssignableFrom(typeof(TKey))
                 || typeof(IDisposable).IsAssignableFrom(typeof(TValue))))
         {
             var disposeKeys = typeof(IDisposable).IsAssignableFrom(typeof(TKey));
             var disposeValues = typeof(IDisposable).IsAssignableFrom(typeof(TValue));
-            var slots = _algo.SlotArray!;
-            var scanLimit = _algo.SlotScanLimit;
+            var slots = algo.SlotArray!;
+            var scanLimit = algo.SlotScanLimit;
             for (var i = 0; i < scanLimit; i++)
             {
-                if (_algo.IsSlotLive(i))
+                if (algo.IsSlotLive(i))
                 {
                     if (disposeKeys)
                     {
@@ -249,8 +261,6 @@ public partial class PooledHashMap<TKey, TValue, TAlgo> : IReadOnlyDictionary<TK
                 }
             }
         }
-        ReturnToCache();
-        GC.SuppressFinalize(this);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

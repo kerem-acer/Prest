@@ -28,10 +28,12 @@ globs: ["**/*Tests*/**", "**/*Test*.cs", "**/tests/**"]
 
 ## Ref Struct Considerations
 
-- Prest ref-struct types: `StackOnlyPooledList<T>`, `StackOnlyPooledMap<K,V>`, `StackOnlyPooledHashSet<T>`. A `ref struct` cannot live across `await` boundaries.
+- Prest ref-struct types: `StackOnlyPooledList<T>`, `StackOnlyPooledStack<T>`, `StackOnlyPooledHashMap<K,V>` / `StackOnlyPooledHashMap<K,V,TAlgo>`, `StackOnlyPooledHashSet<T>` / `StackOnlyPooledHashSet<T,TAlgo>`, `ValuePooledBufferWriter<T>`. A `ref struct` cannot live across `await` boundaries.
 - **Extract all values before the first `await`:** call methods on the ref struct and store results in regular variables (int, bool, etc.) before asserting.
-- Do NOT pass a ref struct to async lambdas or capture it in closures.
-- Dispose inline within the sync portion of the test (`using var map = ...;`) — the `using` scope must not cross an `await`.
+- Do NOT pass a ref struct to async lambdas or capture it in closures. A lambda may create and dispose its own instance (e.g. inside `Assert.That(() => { ... }).Throws<T>()`).
+- Dispose inline within the sync portion of the test (`using var map = ...;`) — the `using` scope must not cross an `await`. Wrap it in a `{ }` block that ends before the first `await`, or move the work into a sync helper that returns plain values.
+- A `using var` local can't be passed by `ref` (CS1657). To hand one to a `ref` helper, declare it without `using` and call `Dispose()` in `finally`.
+- For algorithm-generic tests, the sync helper is generic over `TAlgo` and constructs the stack-only collection itself; the test body's `switch` closes the generic per `HashAlgorithmKind`.
 
 ## Assertions
 
