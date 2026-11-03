@@ -97,6 +97,22 @@ set.Add("apple");
 var wasNew = set.Add("apple");  // false — already present
 ```
 
+Every alias also works with collection expressions. They go through the alias's own `Create`, so they rent from and return to the same per-thread cache:
+
+```csharp
+using PooledHashMap<string, int> empty = [];
+using PooledHashMap<string, int> stock = [new("apples", 3), new("pears", 5)];
+using PooledHashMap<string, int> more = [.. stock, new("plums", 2)];
+using PooledHashSet<string> tags = ["red", "green", "red"];  // 2 items — duplicates are ignored
+
+// C# 15 collection arguments: pre-size the table.
+using RobinHoodHashMap<int, int> sized = [with(capacity: 256)];
+```
+
+- `[]`, `[a, b]` and spreads work on C# 12 and later. `[with(...)]` needs C# 15 (`<LangVersion>preview</LangVersion>` on the .NET 11 SDK).
+- A key that appears twice in a map expression doesn't throw: the last entry wins.
+- Map elements are `KeyValuePair<K,V>` values (`new("apples", 3)`). Dictionary expressions (`["apples": 3]`) aren't in the compiler yet.
+
 Every alias's `Create` returns the alias itself, so the short name works for fields, parameters and return types:
 
 ```csharp
@@ -156,9 +172,15 @@ Console.WriteLine(map.Comparer == StringComparer.OrdinalIgnoreCase);  // True
 // Comparer + finalizer.
 using var ids = ComparerRobinHoodHashMap<string, int, FibonacciFinalizer>.Create(
     StringComparer.Ordinal);
+
+// Collection expressions (C# 15) take the comparer, and optionally a capacity, in with(...).
+using ComparerSwissHashMap<string, int> m = [with(StringComparer.OrdinalIgnoreCase)];
+using ComparerSwissHashSet<string> words =
+    [with(StringComparer.OrdinalIgnoreCase, 16), "Hello", "HELLO"];  // 1 item
 ```
 
-- `Create(comparer)` is the only way to create one; the comparer-less `Create()` / `Create(capacity)` overloads are compile errors on these aliases. Passing `null` uses `EqualityComparer<T>.Default`.
+- `Create(comparer)` or `[with(comparer), ...]` creates one. Without a comparer (`Create()`, `Create(capacity)`, `[]`, `[with(capacity)]`) it's a compile error on these aliases. Passing `null` uses `EqualityComparer<T>.Default`.
+- The `{Algo}HashMap<K,V>` / `{Algo}HashMap<K,V,TFinalizer>` aliases (and their sets) always use `EqualityComparer<T>.Default`. `Create(comparer)` or `[with(comparer)]` on them is a compile error that names the `Comparer{Algo}` alias to use.
 - `Comparer` returns the comparer the map or set uses.
 - The per-thread cache only hands a disposed instance back to a `Create` call with the **same comparer instance** (reference equality — singletons like `StringComparer.OrdinalIgnoreCase` qualify). A different comparer gets a new instance.
 
