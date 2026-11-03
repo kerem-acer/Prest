@@ -4,7 +4,7 @@ namespace Prest;
 
 public partial class PooledHashMap<TKey, TValue, TAlgo>
 {
-    /// <summary>Backs <see cref="PooledCollectionsMarshal.GetValueRefOrNullRef{TKey,TValue,TAlgo}" />.</summary>
+    /// <summary>Backs <see cref="PooledCollectionsMarshal.GetValueRefOrNullRef{TKey,TValue,TAlgo}(PooledHashMap{TKey,TValue,TAlgo}, TKey)" />.</summary>
     internal ref TValue GetValueRefOrNullRef(TKey key)
     {
         ref var slot = ref Unsafe.AsRef(in _algo.FindSlot<Extractor>(key));
@@ -15,7 +15,7 @@ public partial class PooledHashMap<TKey, TValue, TAlgo>
         return ref slot.Value;
     }
 
-    /// <summary>Backs <see cref="PooledCollectionsMarshal.GetValueRefOrAddDefault{TKey,TValue,TAlgo}" />.</summary>
+    /// <summary>Backs <see cref="PooledCollectionsMarshal.GetValueRefOrAddDefault{TKey,TValue,TAlgo}(PooledHashMap{TKey,TValue,TAlgo}, TKey, out bool)" />.</summary>
     internal ref TValue? GetValueRefOrAddDefault(TKey key, out bool exists)
     {
         if (!_algo.IsAllocated)

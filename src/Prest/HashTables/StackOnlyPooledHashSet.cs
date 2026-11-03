@@ -45,7 +45,7 @@ namespace Prest;
 /// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}")]
-public ref struct StackOnlyPooledHashSet<T, TAlgo> : IDisposable
+public ref partial struct StackOnlyPooledHashSet<T, TAlgo> : IDisposable
     where T : notnull
     where TAlgo : struct, IHashAlgorithm<T, T>
 {
@@ -95,7 +95,7 @@ public ref struct StackOnlyPooledHashSet<T, TAlgo> : IDisposable
     {
         if (!_algo.IsAllocated)
         {
-            EnsureInitialized();
+            EnsureInitialized(ref _algo);
         }
         return _algo.Insert<IdentitySlotKeyExtractor<T>>(item, item, out _);
     }
@@ -154,8 +154,10 @@ public ref struct StackOnlyPooledHashSet<T, TAlgo> : IDisposable
     /// </summary>
     public void Dispose() => _algo.Dispose();
 
+    // Static over the algorithm so the alternate lookups, which hold only a reference to it, rent
+    // the same first capacity.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    void EnsureInitialized() => _algo.Initialize(capacity: 8);
+    static void EnsureInitialized(ref TAlgo algo) => algo.Initialize(capacity: 8);
 }
 
 /// <summary>
@@ -267,4 +269,31 @@ public ref struct StackOnlyPooledHashSet<T> : IDisposable
     /// <inheritdoc cref="StackOnlyPooledHashSet{T,TAlgo}.Dispose" />
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Dispose() => _set.Dispose();
+
+    // Alternate lookup. The lookups are the generic set's views over this wrapper's inner set, so
+    // their types name its algorithm.
+#if NET9_0_OR_GREATER
+    /// <inheritdoc cref="StackOnlyPooledHashSet{T,TAlgo}.GetAlternateLookup{TAlternate}" />
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public StackOnlyPooledHashSet<T, SwissTableAlgorithm<T, T, OptionalComparerHasher<T>, NoOpHashFinalizer>>.AlternateLookup<TAlternate> GetAlternateLookup<TAlternate>()
+        where TAlternate : notnull, allows ref struct
+        => _set.GetAlternateLookup<TAlternate>();
+
+    /// <inheritdoc cref="StackOnlyPooledHashSet{T,TAlgo}.TryGetAlternateLookup{TAlternate}" />
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetAlternateLookup<TAlternate>(
+        out StackOnlyPooledHashSet<T, SwissTableAlgorithm<T, T, OptionalComparerHasher<T>, NoOpHashFinalizer>>.AlternateLookup<TAlternate> lookup)
+        where TAlternate : notnull, allows ref struct
+        => _set.TryGetAlternateLookup<TAlternate>(out lookup);
+
+    /// <inheritdoc cref="StackOnlyPooledHashSet{T,TAlgo}.GetAlternateLookup{TAlternate,TAltHasher}" />
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public StackOnlyPooledHashSet<T, SwissTableAlgorithm<T, T, OptionalComparerHasher<T>, NoOpHashFinalizer>>.AlternateLookup<TAlternate, TAltHasher> GetAlternateLookup<TAlternate, TAltHasher>(TAltHasher hasher = default)
+        where TAlternate : notnull, allows ref struct
+        where TAltHasher : struct, IAlternateHasher<TAlternate, T>
+        => _set.GetAlternateLookup<TAlternate, TAltHasher>(hasher);
+#endif
 }

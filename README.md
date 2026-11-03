@@ -300,12 +300,15 @@ if (!Unsafe.IsNullRef(ref count))
 }
 ```
 
-Both methods take any map type (`PooledHashMap<K,V>`, `ComparerSwissHashMap<K,V>`, …). On net10.0+ they also take an alternate lookup, so `ReadOnlyMemory<byte>` keys can be found or added by a `ReadOnlySpan<byte>`:
+Both methods take any map type (`PooledHashMap<K,V>`, `ComparerSwissHashMap<K,V>`, …), including the stack-only maps. On net10.0+ they also take an alternate lookup, so `ReadOnlyMemory<byte>` keys can be found or added by a `ReadOnlySpan<byte>` (`byteComparer` implements `IAlternateEqualityComparer<ReadOnlySpan<byte>, ReadOnlyMemory<byte>>`):
 
 ```csharp
+using var symbols = new StackOnlyPooledHashMap<ReadOnlyMemory<byte>, Symbol>(64, byteComparer);
 var bySpan = symbols.GetAlternateLookup<ReadOnlySpan<byte>>();
 ref var symbol = ref PooledCollectionsMarshal.GetValueRefOrNullRef(bySpan, address.Span);
 ```
+
+For stack-only maps, the plain-key overloads take the map by `in`, so they accept a `using var` local (which can't be passed by `ref`). They still work on that map, not a copy: `GetValueRefOrAddDefault` adds the entry to it. Pass the variable itself, because a method result would be copied first. The alternate-lookup overloads take the lookup by value, since it already refers to the map.
 
 `GetValueRefOrAddDefault` creates the key (through the comparer or `IAlternateHasher.Create`) only when it adds the entry. As with `CollectionsMarshal`, the reference is valid only until the map changes. Adding or removing an entry, `Clear`, `Dispose` or `Return` can move entries or give the array back to the pool. After that, the reference points into memory someone else may be using.
 
@@ -408,6 +411,18 @@ try
 finally
 {
     map.Dispose();
+}
+```
+
+On net10.0+ both types have [`GetAlternateLookup`](#alternate-key-lookup-net-10), with the same members as the class lookups. The lookup is a `ref struct` that refers to the map's table, so it works on a `using var` local and the compiler won't let it outlive the map. Unlike the map, it can be copied and passed by value. It also works with [`PooledCollectionsMarshal`](#ref-access-to-values):
+
+```csharp
+ReadOnlySpan<char> line = "apple,Pear,APPLE";
+using var counts = new StackOnlyPooledHashMap<string, int>(16, StringComparer.OrdinalIgnoreCase);
+var byName = counts.GetAlternateLookup<ReadOnlySpan<char>>();
+foreach (var range in line.Split(','))
+{
+    PooledCollectionsMarshal.GetValueRefOrAddDefault(byName, line[range], out _)++; // a string only for new names
 }
 ```
 

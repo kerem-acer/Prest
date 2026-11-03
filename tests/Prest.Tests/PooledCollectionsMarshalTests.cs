@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Prest.Tests;
 
-public class PooledCollectionsMarshalTests
+public partial class PooledCollectionsMarshalTests
 {
     const int Key = 17;
     const int MissingKey = 99;

@@ -46,7 +46,7 @@ namespace Prest;
 /// </para>
 /// </remarks>
 [DebuggerDisplay("Count = {Count}")]
-public ref struct StackOnlyPooledHashMap<TKey, TValue, TAlgo> : IDisposable
+public ref partial struct StackOnlyPooledHashMap<TKey, TValue, TAlgo> : IDisposable
     where TKey : notnull
     where TAlgo : struct, IHashAlgorithm<KeyValueSlot<TKey, TValue>, TKey>
 {
@@ -126,7 +126,7 @@ public ref struct StackOnlyPooledHashMap<TKey, TValue, TAlgo> : IDisposable
     {
         if (!_algo.IsAllocated)
         {
-            EnsureInitialized();
+            EnsureInitialized(ref _algo);
         }
         return _algo.Insert<PooledHashMap<TKey, TValue, TAlgo>.Extractor>(key, new KeyValueSlot<TKey, TValue>(key, value), out _);
     }
@@ -170,8 +170,10 @@ public ref struct StackOnlyPooledHashMap<TKey, TValue, TAlgo> : IDisposable
         _algo.Dispose();
     }
 
+    // Static over the algorithm so the alternate lookups and PooledCollectionsMarshal, which hold
+    // only a reference to it, rent the same first capacity.
     [MethodImpl(MethodImplOptions.NoInlining)]
-    void EnsureInitialized() => _algo.Initialize(capacity: 8);
+    static void EnsureInitialized(ref TAlgo algo) => algo.Initialize(capacity: 8);
 }
 
 /// <summary>
@@ -305,4 +307,41 @@ public ref struct StackOnlyPooledHashMap<TKey, TValue> : IDisposable
     /// <inheritdoc cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}.Dispose" />
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Dispose() => _map.Dispose();
+
+    // Alternate lookup and PooledCollectionsMarshal support. The lookups are the generic map's
+    // views over this wrapper's inner map, so their types name its algorithm.
+#if NET9_0_OR_GREATER
+    /// <inheritdoc cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}.GetAlternateLookup{TAlternate}" />
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public StackOnlyPooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, OptionalComparerHasher<TKey>, NoOpHashFinalizer>>.AlternateLookup<TAlternate> GetAlternateLookup<TAlternate>()
+        where TAlternate : notnull, allows ref struct
+        => _map.GetAlternateLookup<TAlternate>();
+
+    /// <inheritdoc cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}.TryGetAlternateLookup{TAlternate}" />
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetAlternateLookup<TAlternate>(
+        out StackOnlyPooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, OptionalComparerHasher<TKey>, NoOpHashFinalizer>>.AlternateLookup<TAlternate> lookup)
+        where TAlternate : notnull, allows ref struct
+        => _map.TryGetAlternateLookup<TAlternate>(out lookup);
+
+    /// <inheritdoc cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}.GetAlternateLookup{TAlternate,TAltHasher}" />
+    [UnscopedRef]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public StackOnlyPooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, OptionalComparerHasher<TKey>, NoOpHashFinalizer>>.AlternateLookup<TAlternate, TAltHasher> GetAlternateLookup<TAlternate, TAltHasher>(TAltHasher hasher = default)
+        where TAlternate : notnull, allows ref struct
+        where TAltHasher : struct, IAlternateHasher<TAlternate, TKey>
+        => _map.GetAlternateLookup<TAlternate, TAltHasher>(hasher);
+#endif
+
+    /// <summary>Backs <see cref="PooledCollectionsMarshal.GetValueRefOrNullRef{TKey,TValue}(in StackOnlyPooledHashMap{TKey,TValue}, TKey)" />.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ref TValue GetValueRefOrNullRef(in StackOnlyPooledHashMap<TKey, TValue> map, TKey key)
+        => ref PooledCollectionsMarshal.GetValueRefOrNullRef(in map._map, key);
+
+    /// <summary>Backs <see cref="PooledCollectionsMarshal.GetValueRefOrAddDefault{TKey,TValue}(in StackOnlyPooledHashMap{TKey,TValue}, TKey, out bool)" />.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ref TValue? GetValueRefOrAddDefault(in StackOnlyPooledHashMap<TKey, TValue> map, TKey key, out bool exists)
+        => ref PooledCollectionsMarshal.GetValueRefOrAddDefault(in map._map, key, out exists);
 }
