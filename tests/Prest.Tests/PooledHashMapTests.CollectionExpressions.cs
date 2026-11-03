@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Reflection;
 using TUnit.Assertions.Enums;
 
@@ -480,6 +481,7 @@ public partial class PooledHashMapTests
         {
             HashAlgorithmKind.Swiss =>
             [
+                (typeof(PooledHashMap<int, int>), "ComparerSwissHashMap<TKey,TValue>"),
                 (typeof(SwissHashMap<int, int>), "ComparerSwissHashMap<TKey,TValue>"),
                 (typeof(SwissHashMap<int, int, FibonacciFinalizer>), "ComparerSwissHashMap<TKey,TValue,TFinalizer>"),
             ],
@@ -507,26 +509,52 @@ public partial class PooledHashMapTests
             .Select(alias => (
                 alias.ComparerAlias,
                 Probe: ProbeHiddenCreate(alias.Alias, comparerSignature),
-                Message: ObsoleteMessage(alias.Alias, comparerSignature)))
+                Message: ObsoleteMessage(alias.Alias, comparerSignature),
+                ThrownMessage: ThrownByCreate(alias.Alias, comparerSignature).Message))
             .ToArray();
 
         // Assert
-        foreach (var (comparerAlias, (isCompileError, isHiddenFromIntelliSense, thrown), message) in probes)
+        foreach (var (comparerAlias, (isCompileError, isHiddenFromIntelliSense, thrown), message, thrownMessage) in probes)
         {
             await Assert.That(isCompileError).IsTrue();
             await Assert.That(isHiddenFromIntelliSense).IsTrue();
             await Assert.That(thrown).IsEqualTo(typeof(NotSupportedException));
             await Assert.That(message).Contains($"use {comparerAlias}.Create(comparer)");
+            await Assert.That(thrownMessage).IsEqualTo(message);
         }
+    }
+
+    [Test]
+    public async Task Create_ComparerOnDefaultAlias_IsCompileErrorPointingToComparerSwissAlias()
+    {
+        // Arrange — PooledHashMap<K,V> stays comparer-free (an optional comparer would slow
+        // every default-hasher lookup), so Create(comparer) and [with(comparer)] say which alias to use.
+        const string ExpectedMessage =
+            "PooledHashMap<TKey,TValue> always uses EqualityComparer<TKey>.Default; for a custom IEqualityComparer<TKey> use ComparerSwissHashMap<TKey,TValue>.Create(comparer) or [with(comparer)].";
+        Type[] comparerSignature = [typeof(IEqualityComparer<int>), typeof(int)];
+        var create = typeof(PooledHashMap<int, int>).GetMethod(
+            "Create", BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly, comparerSignature)!;
+
+        // Act
+        var obsolete = create.GetCustomAttribute<ObsoleteAttribute>();
+        var browsable = create.GetCustomAttribute<EditorBrowsableAttribute>();
+        var thrown = ThrownByCreate(typeof(PooledHashMap<int, int>), comparerSignature);
+
+        // Assert
+        await Assert.That(obsolete?.IsError).IsTrue();
+        await Assert.That(obsolete?.Message).IsEqualTo(ExpectedMessage);
+        await Assert.That(browsable?.State).IsEqualTo(EditorBrowsableState.Never);
+        await Assert.That(thrown).IsTypeOf<NotSupportedException>();
+        await Assert.That(thrown.Message).IsEqualTo(ExpectedMessage);
     }
 
     [Test]
     public async Task CollectionBuilder_ComparerMisuseOverloads_AreCompileErrorsThatThrowNotSupported()
     {
-        // Arrange — two overloads for each of the 8 aliases that always use the default comparer
+        // Arrange — two overloads for each of the 9 aliases that always use the default comparer
         // ([with(comparer), ...] and [with(comparer, capacity), ...]) and for each of the 8 Comparer*
         // aliases ([...] and [with(capacity), ...]).
-        const int DefaultComparerAliasOverloads = 16;
+        const int DefaultComparerAliasOverloads = 18;
         const int ComparerAliasOverloads = 16;
         const string ComparerHint = "use [with(comparer), ...]";
         Type[] comparerSignature = [typeof(IEqualityComparer<int>), typeof(int)];
@@ -578,6 +606,21 @@ public partial class PooledHashMapTests
         var rebuilt = build();
         rebuilt.Dispose();
         return (built, created, rebuilt);
+    }
+
+    // Calls a hidden Create overload with a null comparer and zero capacity; it must throw.
+    static Exception ThrownByCreate(Type alias, Type[] signature)
+    {
+        var method = alias.GetMethod("Create", BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly, signature)!;
+        try
+        {
+            method.Invoke(null, [null, 0]);
+        }
+        catch (TargetInvocationException e) when (e.InnerException is not null)
+        {
+            return e.InnerException;
+        }
+        throw new InvalidOperationException($"{method} did not throw.");
     }
 
     static string? ObsoleteMessage(Type alias, Type[] signature)

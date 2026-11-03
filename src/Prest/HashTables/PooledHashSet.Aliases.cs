@@ -58,6 +58,15 @@ public class PooledHashSet<T>
     /// </summary>
     public static new PooledHashSet<T> Create(int capacity) => TakeCached() ?? new PooledHashSet<T>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashSet{T}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static PooledHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static PooledHashSet<T>? TakeCached()
@@ -105,7 +114,7 @@ public sealed class SwissHashSet<T>
     /// </summary>
     [Obsolete(AliasErrors.SwissHashSetUsesDefaultComparer, error: true)]
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static SwissHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+    public static new SwissHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
         => throw AliasErrors.NotSupported(AliasErrors.SwissHashSetUsesDefaultComparer);
 
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);

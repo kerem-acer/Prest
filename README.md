@@ -180,7 +180,7 @@ using ComparerSwissHashSet<string> words =
 ```
 
 - `Create(comparer)` or `[with(comparer), ...]` creates one. Without a comparer (`Create()`, `Create(capacity)`, `[]`, `[with(capacity)]`) it's a compile error on these aliases. Passing `null` uses `EqualityComparer<T>.Default`.
-- The `{Algo}HashMap<K,V>` / `{Algo}HashMap<K,V,TFinalizer>` aliases (and their sets) always use `EqualityComparer<T>.Default`. `Create(comparer)` or `[with(comparer)]` on them is a compile error that names the `Comparer{Algo}` alias to use.
+- `PooledHashMap<K,V>` and the `{Algo}HashMap<K,V>` / `{Algo}HashMap<K,V,TFinalizer>` aliases (and their sets) always use `EqualityComparer<T>.Default`. `Create(comparer)` or `[with(comparer)]` on them is a compile error that names the `Comparer{Algo}` alias to use.
 - `Comparer` returns the comparer the map or set uses.
 - The per-thread cache only hands a disposed instance back to a `Create` call with the **same comparer instance** (reference equality — singletons like `StringComparer.OrdinalIgnoreCase` qualify). A different comparer gets a new instance.
 

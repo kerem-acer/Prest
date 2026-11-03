@@ -28,8 +28,9 @@ namespace Prest;
 //
 // Every alias supports collection expressions through PooledHashMapCollectionBuilder,
 // which goes through the alias's own Create. Create(comparer) and [with(comparer)] on
-// the {Algo}HashMap<K,V> / <K,V,TFinalizer> aliases, and a Comparer* collection
-// expression without a comparer, are compile errors that name the right type.
+// PooledHashMap<K,V> and the {Algo}HashMap<K,V> / <K,V,TFinalizer> aliases, and a
+// Comparer* collection expression without a comparer, are compile errors that name the
+// right type.
 // ---------------------------------------------------------------------------
 
 /// <summary>Default pooled hash map — SwissTable + default equality comparer + no finalizer.</summary>
@@ -77,6 +78,15 @@ public class PooledHashMap<TKey, TValue>
     /// </summary>
     public static new PooledHashMap<TKey, TValue> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
+
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashMap{TKey,TValue}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.PooledHashMapUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static PooledHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashMapUsesDefaultComparer);
 
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
@@ -136,7 +146,7 @@ public sealed class SwissHashMap<TKey, TValue>
     /// </summary>
     [Obsolete(AliasErrors.SwissHashMapUsesDefaultComparer, error: true)]
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static SwissHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+    public static new SwissHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
         => throw AliasErrors.NotSupported(AliasErrors.SwissHashMapUsesDefaultComparer);
 
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
@@ -1474,7 +1484,10 @@ static class AliasErrors
     const string MapDefaultComparerOnly = " always uses EqualityComparer<TKey>.Default; for a custom IEqualityComparer<TKey> use ";
     const string SetDefaultComparerOnly = " always uses EqualityComparer<T>.Default; for a custom IEqualityComparer<T> use ";
     const string CreateWithComparer = ".Create(comparer).";
+    const string CreateOrWithComparer = ".Create(comparer) or [with(comparer)].";
 
+    internal const string PooledHashMapUsesDefaultComparer =
+        "PooledHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerSwissHashMap<TKey,TValue>" + CreateOrWithComparer;
     internal const string SwissHashMapUsesDefaultComparer =
         "SwissHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerSwissHashMap<TKey,TValue>" + CreateWithComparer;
     internal const string SwissHashMapFinalizerUsesDefaultComparer =
@@ -1492,6 +1505,8 @@ static class AliasErrors
     internal const string ChainedHashMapFinalizerUsesDefaultComparer =
         "ChainedHashMap<TKey,TValue,TFinalizer>" + MapDefaultComparerOnly + "ComparerChainedHashMap<TKey,TValue,TFinalizer>" + CreateWithComparer;
 
+    internal const string PooledHashSetUsesDefaultComparer =
+        "PooledHashSet<T>" + SetDefaultComparerOnly + "ComparerSwissHashSet<T>" + CreateOrWithComparer;
     internal const string SwissHashSetUsesDefaultComparer =
         "SwissHashSet<T>" + SetDefaultComparerOnly + "ComparerSwissHashSet<T>" + CreateWithComparer;
     internal const string SwissHashSetFinalizerUsesDefaultComparer =

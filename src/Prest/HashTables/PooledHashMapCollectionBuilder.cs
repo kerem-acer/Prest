@@ -42,6 +42,18 @@ public static class PooledHashMapCollectionBuilder
         return map;
     }
 
+    /// <summary>Not supported — <see cref="PooledHashMap{TKey,TValue}" /> always uses the default comparer.</summary>
+    [Obsolete(AliasErrors.PooledHashMapUsesDefaultComparer, error: true)]
+    public static PooledHashMap<TKey, TValue> Create<TKey, TValue>(IEqualityComparer<TKey>? comparer, ReadOnlySpan<KeyValuePair<TKey, TValue>> items)
+        where TKey : notnull
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashMapUsesDefaultComparer);
+
+    /// <summary>Not supported — <see cref="PooledHashMap{TKey,TValue}" /> always uses the default comparer.</summary>
+    [Obsolete(AliasErrors.PooledHashMapUsesDefaultComparer, error: true)]
+    public static PooledHashMap<TKey, TValue> Create<TKey, TValue>(IEqualityComparer<TKey>? comparer, int capacity, ReadOnlySpan<KeyValuePair<TKey, TValue>> items)
+        where TKey : notnull
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashMapUsesDefaultComparer);
+
     // ---- SwissHashMap ----
 
     /// <summary>Builds a <see cref="SwissHashMap{TKey,TValue}" /> from <paramref name="items" />: <c>[a, b]</c>.</summary>

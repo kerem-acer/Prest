@@ -42,6 +42,18 @@ public static class PooledHashSetCollectionBuilder
         return set;
     }
 
+    /// <summary>Not supported — <see cref="PooledHashSet{T}" /> always uses the default comparer.</summary>
+    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
+    public static PooledHashSet<T> Create<T>(IEqualityComparer<T>? comparer, ReadOnlySpan<T> items)
+        where T : notnull
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+
+    /// <summary>Not supported — <see cref="PooledHashSet{T}" /> always uses the default comparer.</summary>
+    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
+    public static PooledHashSet<T> Create<T>(IEqualityComparer<T>? comparer, int capacity, ReadOnlySpan<T> items)
+        where T : notnull
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+
     // ---- SwissHashSet ----
 
     /// <summary>Builds a <see cref="SwissHashSet{T}" /> from <paramref name="items" />: <c>[a, b]</c>.</summary>
