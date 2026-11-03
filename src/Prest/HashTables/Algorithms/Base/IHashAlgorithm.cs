@@ -32,6 +32,10 @@ public interface IHashAlgorithm<TSlot, in TKey> : IDisposable
     ref readonly TSlot FindSlot<TExtractor>(TKey key)
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>;
 
+    // Insert returns false on a duplicate and leaves the table unchanged. Either
+    // way, slotIdx is the SlotArray index of the entry for the key: the existing
+    // one on a duplicate, the new one otherwise, after any grow the insert did.
+    // PooledCollectionsMarshal.GetValueRefOrAddDefault hands out a ref to it.
     bool Insert<TExtractor>(TKey key, TSlot newSlot, out int slotIdx)
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>;
 
@@ -68,7 +72,9 @@ public interface IHashAlgorithm<TSlot, in TKey> : IDisposable
     /// <summary>
     /// Inserts the slot built by <see cref="IInsertProbe{TSlot}.CreateSlot" /> unless
     /// <paramref name="probe" /> matches an existing slot. Returns <see langword="false" /> on a
-    /// duplicate; <see cref="IInsertProbe{TSlot}.CreateSlot" /> is then never called.
+    /// duplicate; <see cref="IInsertProbe{TSlot}.CreateSlot" /> is then never called. Either way,
+    /// <paramref name="slotIdx" /> is the <see cref="SlotArray" /> index of the matching entry: the
+    /// existing one on a duplicate, the new one otherwise.
     /// </summary>
     bool Insert<TExtractor, TProbe>(TProbe probe, out int slotIdx)
         where TExtractor : struct, ISlotKeyExtractor<TSlot, TKey>

@@ -130,6 +130,13 @@ public partial class PooledHashMap<TKey, TValue, TAlgo>
         /// <summary>Removes the entry for <paramref name="key" />, if present, and returns its stored key and value.</summary>
         public bool Remove(TAlternate key, [MaybeNullWhen(false)] out TKey actualKey, [MaybeNullWhen(false)] out TValue value)
             => _lookup.Remove(key, out actualKey, out value);
+
+        /// <summary>Backs <see cref="PooledCollectionsMarshal" />'s alternate-lookup <c>GetValueRefOrNullRef</c>.</summary>
+        internal ref TValue GetValueRefOrNullRef(TAlternate key) => ref _lookup.GetValueRefOrNullRef(key);
+
+        /// <summary>Backs <see cref="PooledCollectionsMarshal" />'s alternate-lookup <c>GetValueRefOrAddDefault</c>.</summary>
+        internal ref TValue? GetValueRefOrAddDefault(TAlternate key, out bool exists)
+            => ref _lookup.GetValueRefOrAddDefault(key, out exists);
     }
 
     /// <summary>
@@ -241,6 +248,33 @@ public partial class PooledHashMap<TKey, TValue, TAlgo>
             actualKey = default;
             value = default;
             return false;
+        }
+
+        /// <summary>Backs <see cref="PooledCollectionsMarshal" />'s alternate-lookup <c>GetValueRefOrNullRef</c>.</summary>
+        internal ref TValue GetValueRefOrNullRef(TAlternate key)
+        {
+            ref var slot = ref Unsafe.AsRef(in _map._algo.FindSlot<Extractor, AlternateProbe<TAlternate, TAltHasher>>(new(key, _hasher)));
+            if (Unsafe.IsNullRef(ref slot))
+            {
+                return ref Unsafe.NullRef<TValue>();
+            }
+            return ref slot.Value;
+        }
+
+        /// <summary>
+        /// Backs <see cref="PooledCollectionsMarshal" />'s alternate-lookup <c>GetValueRefOrAddDefault</c>.
+        /// One probe; <see cref="IAlternateHasher{TAlternate,T}.Create" /> builds the key only on an add.
+        /// </summary>
+        internal ref TValue? GetValueRefOrAddDefault(TAlternate key, out bool exists)
+        {
+            var map = _map;
+            if (!map._algo.IsAllocated)
+            {
+                map.EnsureInitialized();
+            }
+            exists = !map._algo.Insert<Extractor, AlternateInsertProbe<TAlternate, TAltHasher>>(
+                new(key, _hasher, default!), out var slotIdx);
+            return ref map._algo.SlotArray![slotIdx].Value!;
         }
     }
 

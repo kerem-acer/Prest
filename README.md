@@ -256,6 +256,33 @@ The hasher has to agree with the map's hasher: an alternate key must get the sam
 
 Alternate lookup is in the net10.0 and net11.0 builds. It relies on `allows ref struct`, which needs .NET 9+, so the net8.0 and netstandard builds don't have it.
 
+### Ref access to values
+
+`PooledCollectionsMarshal` is the counterpart of `CollectionsMarshal` for maps. It has `GetValueRefOrNullRef` and `GetValueRefOrAddDefault`, which let you read or update a value in place with one lookup:
+
+```csharp
+using var counts = PooledHashMap<string, int>.Create();
+foreach (var word in words)
+{
+    PooledCollectionsMarshal.GetValueRefOrAddDefault(counts, word, out _)++;
+}
+
+ref var count = ref PooledCollectionsMarshal.GetValueRefOrNullRef(counts, "apple");
+if (!Unsafe.IsNullRef(ref count))
+{
+    count = 0;
+}
+```
+
+Both methods take any map type (`PooledHashMap<K,V>`, `ComparerSwissHashMap<K,V>`, …). On net10.0+ they also take an alternate lookup, so `ReadOnlyMemory<byte>` keys can be found or added by a `ReadOnlySpan<byte>`:
+
+```csharp
+var bySpan = symbols.GetAlternateLookup<ReadOnlySpan<byte>>();
+ref var symbol = ref PooledCollectionsMarshal.GetValueRefOrNullRef(bySpan, address.Span);
+```
+
+`GetValueRefOrAddDefault` creates the key (through the comparer or `IAlternateHasher.Create`) only when it adds the entry. As with `CollectionsMarshal`, the reference is valid only until the map changes. Adding or removing an entry, `Clear`, `Dispose` or `Return` can move entries or give the array back to the pool. After that, the reference points into memory someone else may be using.
+
 ### Pooled arrays and lists
 
 ```csharp

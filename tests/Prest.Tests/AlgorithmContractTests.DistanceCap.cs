@@ -69,6 +69,32 @@ public partial class AlgorithmContractTests
         await Assert.That(clusterKeys.Append(0).Append(CapBucketCount).All(k => map.TryGetValue(k, out var v) && v == k)).IsTrue();
     }
 
+    [Test]
+    public async Task RobinHood_GetValueRefOrAddDefaultDisplacingEntryPastDistanceCap_ReturnsRefToNewEntry()
+    {
+        // Arrange: the same layout as above, so adding CapBucketCount pushes a displaced entry past
+        // the cap and the insert finishes after a grow.
+        const int ClusterSize = MaxProbeDistance + 1;
+        const int NewValue = -1;
+        using var map = ComparerRobinHoodHashMap<int, int>.Create(new IdentityComparer(), CapCapacity);
+        map.Add(0, 0);
+        var clusterKeys = Enumerable.Range(0, ClusterSize).Select(j => 1 + (j * CapBucketCount)).ToArray();
+        foreach (var key in clusterKeys)
+        {
+            map.Add(key, key);
+        }
+        var capacityBefore = map.Capacity;
+
+        // Act: write through the returned ref. It must be the new entry's value, not the displaced one's.
+        PooledCollectionsMarshal.GetValueRefOrAddDefault(map, CapBucketCount, out var exists) = NewValue;
+
+        // Assert
+        await Assert.That(exists).IsFalse();
+        await Assert.That(map.Capacity).IsGreaterThan(capacityBefore);
+        await Assert.That(map[CapBucketCount]).IsEqualTo(NewValue);
+        await Assert.That(clusterKeys.Append(0).All(k => map.TryGetValue(k, out var v) && v == k)).IsTrue();
+    }
+
     sealed class IdentityComparer : IEqualityComparer<int>
     {
         public bool Equals(int x, int y) => x == y;
