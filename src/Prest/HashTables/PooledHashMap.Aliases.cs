@@ -1,4 +1,7 @@
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+#pragma warning disable IDE0028 // The collection builder ends in these `new Alias(capacity)` calls; `[with(capacity)]` here would recurse.
 
 namespace Prest;
 
@@ -22,14 +25,22 @@ namespace Prest;
 // PooledHashMap<K,V> is the default configuration (SwissTable). SwissHashMap<K,V>
 // derives from it, so a SwissHashMap<K,V> can be passed wherever a
 // PooledHashMap<K,V> is expected; the two still keep separate caches.
+//
+// Every alias supports collection expressions through PooledHashMapCollectionBuilder,
+// which goes through the alias's own Create. Create(comparer) and [with(comparer)] on
+// PooledHashMap<K,V> and the {Algo}HashMap<K,V> / <K,V,TFinalizer> aliases, and a
+// Comparer* collection expression without a comparer, are compile errors that name the
+// right type.
 // ---------------------------------------------------------------------------
 
 /// <summary>Default pooled hash map — SwissTable + default equality comparer + no finalizer.</summary>
 /// <remarks>
 /// Same configuration as <see cref="SwissHashMap{TKey,TValue}" />, which derives from this type.
 /// Not sealed so that <c>Prest.ObjectPool</c> can subclass it; instances of subclasses never
-/// enter this type's per-thread cache.
+/// enter this type's per-thread cache. Supports collection expressions, like every alias:
+/// <c>PooledHashMap&lt;string, int&gt; map = [new("a", 1)];</c>
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.Create))]
 public class PooledHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -68,6 +79,15 @@ public class PooledHashMap<TKey, TValue>
     public static new PooledHashMap<TKey, TValue> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashMap{TKey,TValue}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.PooledHashMapUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static PooledHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashMapUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static PooledHashMap<TKey, TValue>? TakeCached()
@@ -81,6 +101,7 @@ public class PooledHashMap<TKey, TValue>
 // ---- SwissTable ----
 
 /// <summary>SwissTable + default hasher + no finalizer. Derives from <see cref="PooledHashMap{TKey,TValue}" /> (same configuration).</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue>
     where TKey : notnull
@@ -119,6 +140,15 @@ public sealed class SwissHashMap<TKey, TValue>
     public static new SwissHashMap<TKey, TValue> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashMap{TKey,TValue}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.SwissHashMapUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static new SwissHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.SwissHashMapUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static SwissHashMap<TKey, TValue>? TakeCached()
@@ -130,6 +160,7 @@ public sealed class SwissHashMap<TKey, TValue>
 }
 
 /// <summary>SwissTable + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -169,6 +200,15 @@ public sealed class SwissHashMap<TKey, TValue, TFinalizer>
     public static new SwissHashMap<TKey, TValue, TFinalizer> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashMap{TKey,TValue,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.SwissHashMapFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static SwissHashMap<TKey, TValue, TFinalizer> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.SwissHashMapFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static SwissHashMap<TKey, TValue, TFinalizer>? TakeCached()
@@ -186,6 +226,7 @@ public sealed class SwissHashMap<TKey, TValue, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerSwissHashMap</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashMap<TKey, TValue, THasher, TFinalizer>
     : PooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, THasher, TFinalizer>>
     where TKey : notnull
@@ -250,6 +291,7 @@ public sealed class SwissHashMap<TKey, TValue, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerSwiss))]
 public sealed class ComparerSwissHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -327,6 +369,7 @@ public sealed class ComparerSwissHashMap<TKey, TValue>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerSwiss))]
 public sealed class ComparerSwissHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -401,6 +444,7 @@ public sealed class ComparerSwissHashMap<TKey, TValue, TFinalizer>
 // ---- Robin Hood ----
 
 /// <summary>Robin Hood + default hasher + no finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateRobinHood))]
 public sealed class RobinHoodHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, RobinHoodAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -439,6 +483,15 @@ public sealed class RobinHoodHashMap<TKey, TValue>
     public static new RobinHoodHashMap<TKey, TValue> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerRobinHoodHashMap{TKey,TValue}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.RobinHoodHashMapUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static RobinHoodHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.RobinHoodHashMapUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static RobinHoodHashMap<TKey, TValue>? TakeCached()
@@ -450,6 +503,7 @@ public sealed class RobinHoodHashMap<TKey, TValue>
 }
 
 /// <summary>Robin Hood + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateRobinHood))]
 public sealed class RobinHoodHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, RobinHoodAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -489,6 +543,15 @@ public sealed class RobinHoodHashMap<TKey, TValue, TFinalizer>
     public static new RobinHoodHashMap<TKey, TValue, TFinalizer> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerRobinHoodHashMap{TKey,TValue,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.RobinHoodHashMapFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static RobinHoodHashMap<TKey, TValue, TFinalizer> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.RobinHoodHashMapFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static RobinHoodHashMap<TKey, TValue, TFinalizer>? TakeCached()
@@ -506,6 +569,7 @@ public sealed class RobinHoodHashMap<TKey, TValue, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerRobinHoodHashMap</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateRobinHood))]
 public sealed class RobinHoodHashMap<TKey, TValue, THasher, TFinalizer>
     : PooledHashMap<TKey, TValue, RobinHoodAlgorithm<KeyValueSlot<TKey, TValue>, TKey, THasher, TFinalizer>>
     where TKey : notnull
@@ -570,6 +634,7 @@ public sealed class RobinHoodHashMap<TKey, TValue, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerRobinHood))]
 public sealed class ComparerRobinHoodHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, RobinHoodAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -647,6 +712,7 @@ public sealed class ComparerRobinHoodHashMap<TKey, TValue>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerRobinHood))]
 public sealed class ComparerRobinHoodHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, RobinHoodAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -721,6 +787,7 @@ public sealed class ComparerRobinHoodHashMap<TKey, TValue, TFinalizer>
 // ---- Linear probing ----
 
 /// <summary>Linear probing + default hasher + no finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateLinear))]
 public sealed class LinearHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, LinearProbingAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -759,6 +826,15 @@ public sealed class LinearHashMap<TKey, TValue>
     public static new LinearHashMap<TKey, TValue> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerLinearHashMap{TKey,TValue}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.LinearHashMapUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LinearHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.LinearHashMapUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static LinearHashMap<TKey, TValue>? TakeCached()
@@ -770,6 +846,7 @@ public sealed class LinearHashMap<TKey, TValue>
 }
 
 /// <summary>Linear probing + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateLinear))]
 public sealed class LinearHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, LinearProbingAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -809,6 +886,15 @@ public sealed class LinearHashMap<TKey, TValue, TFinalizer>
     public static new LinearHashMap<TKey, TValue, TFinalizer> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerLinearHashMap{TKey,TValue,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.LinearHashMapFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LinearHashMap<TKey, TValue, TFinalizer> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.LinearHashMapFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static LinearHashMap<TKey, TValue, TFinalizer>? TakeCached()
@@ -826,6 +912,7 @@ public sealed class LinearHashMap<TKey, TValue, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerLinearHashMap</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateLinear))]
 public sealed class LinearHashMap<TKey, TValue, THasher, TFinalizer>
     : PooledHashMap<TKey, TValue, LinearProbingAlgorithm<KeyValueSlot<TKey, TValue>, TKey, THasher, TFinalizer>>
     where TKey : notnull
@@ -890,6 +977,7 @@ public sealed class LinearHashMap<TKey, TValue, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerLinear))]
 public sealed class ComparerLinearHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, LinearProbingAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -967,6 +1055,7 @@ public sealed class ComparerLinearHashMap<TKey, TValue>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerLinear))]
 public sealed class ComparerLinearHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, LinearProbingAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -1041,6 +1130,7 @@ public sealed class ComparerLinearHashMap<TKey, TValue, TFinalizer>
 // ---- Separate chaining ----
 
 /// <summary>Separate chaining + default hasher + no finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateChained))]
 public sealed class ChainedHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, ChainedAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -1079,6 +1169,15 @@ public sealed class ChainedHashMap<TKey, TValue>
     public static new ChainedHashMap<TKey, TValue> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerChainedHashMap{TKey,TValue}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.ChainedHashMapUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static ChainedHashMap<TKey, TValue> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.ChainedHashMapUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static ChainedHashMap<TKey, TValue>? TakeCached()
@@ -1090,6 +1189,7 @@ public sealed class ChainedHashMap<TKey, TValue>
 }
 
 /// <summary>Separate chaining + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateChained))]
 public sealed class ChainedHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, ChainedAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -1129,6 +1229,15 @@ public sealed class ChainedHashMap<TKey, TValue, TFinalizer>
     public static new ChainedHashMap<TKey, TValue, TFinalizer> Create(TKey[] rentedKeys, TValue[] rentedValues, int count)
         => new(rentedKeys, rentedValues, count);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerChainedHashMap{TKey,TValue,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.ChainedHashMapFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static ChainedHashMap<TKey, TValue, TFinalizer> Create(IEqualityComparer<TKey> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.ChainedHashMapFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static ChainedHashMap<TKey, TValue, TFinalizer>? TakeCached()
@@ -1146,6 +1255,7 @@ public sealed class ChainedHashMap<TKey, TValue, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerChainedHashMap</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateChained))]
 public sealed class ChainedHashMap<TKey, TValue, THasher, TFinalizer>
     : PooledHashMap<TKey, TValue, ChainedAlgorithm<KeyValueSlot<TKey, TValue>, TKey, THasher, TFinalizer>>
     where TKey : notnull
@@ -1210,6 +1320,7 @@ public sealed class ChainedHashMap<TKey, TValue, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerChained))]
 public sealed class ComparerChainedHashMap<TKey, TValue>
     : PooledHashMap<TKey, TValue, ChainedAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, NoOpHashFinalizer>>
     where TKey : notnull
@@ -1287,6 +1398,7 @@ public sealed class ComparerChainedHashMap<TKey, TValue>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new map.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashMapCollectionBuilder), nameof(PooledHashMapCollectionBuilder.CreateComparerChained))]
 public sealed class ComparerChainedHashMap<TKey, TValue, TFinalizer>
     : PooledHashMap<TKey, TValue, ChainedAlgorithm<KeyValueSlot<TKey, TValue>, TKey, ComparerHasher<TKey>, TFinalizer>>
     where TKey : notnull
@@ -1363,7 +1475,58 @@ static class AliasErrors
     internal const string ComparerRequired =
         "Comparer* aliases need a comparer: call Create(comparer, ...). Passing null uses EqualityComparer<T>.Default.";
 
+    // A Comparer* collection expression without a comparer: `ComparerSwissHashMap<K,V> map = [];`.
+    internal const string ComparerRequiredInCollectionExpression =
+        "Comparer* aliases need a comparer: use [with(comparer), ...] or Create(comparer, ...). Passing null uses EqualityComparer<T>.Default.";
+
+    // A comparer passed to an alias that always uses EqualityComparer<T>.Default — through
+    // Create(comparer) or `[with(comparer), ...]`. Each message names the matching Comparer* alias.
+    const string MapDefaultComparerOnly = " always uses EqualityComparer<TKey>.Default; for a custom IEqualityComparer<TKey> use ";
+    const string SetDefaultComparerOnly = " always uses EqualityComparer<T>.Default; for a custom IEqualityComparer<T> use ";
+    const string CreateWithComparer = ".Create(comparer).";
+    const string CreateOrWithComparer = ".Create(comparer) or [with(comparer)].";
+
+    internal const string PooledHashMapUsesDefaultComparer =
+        "PooledHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerSwissHashMap<TKey,TValue>" + CreateOrWithComparer;
+    internal const string SwissHashMapUsesDefaultComparer =
+        "SwissHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerSwissHashMap<TKey,TValue>" + CreateWithComparer;
+    internal const string SwissHashMapFinalizerUsesDefaultComparer =
+        "SwissHashMap<TKey,TValue,TFinalizer>" + MapDefaultComparerOnly + "ComparerSwissHashMap<TKey,TValue,TFinalizer>" + CreateWithComparer;
+    internal const string RobinHoodHashMapUsesDefaultComparer =
+        "RobinHoodHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerRobinHoodHashMap<TKey,TValue>" + CreateWithComparer;
+    internal const string RobinHoodHashMapFinalizerUsesDefaultComparer =
+        "RobinHoodHashMap<TKey,TValue,TFinalizer>" + MapDefaultComparerOnly + "ComparerRobinHoodHashMap<TKey,TValue,TFinalizer>" + CreateWithComparer;
+    internal const string LinearHashMapUsesDefaultComparer =
+        "LinearHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerLinearHashMap<TKey,TValue>" + CreateWithComparer;
+    internal const string LinearHashMapFinalizerUsesDefaultComparer =
+        "LinearHashMap<TKey,TValue,TFinalizer>" + MapDefaultComparerOnly + "ComparerLinearHashMap<TKey,TValue,TFinalizer>" + CreateWithComparer;
+    internal const string ChainedHashMapUsesDefaultComparer =
+        "ChainedHashMap<TKey,TValue>" + MapDefaultComparerOnly + "ComparerChainedHashMap<TKey,TValue>" + CreateWithComparer;
+    internal const string ChainedHashMapFinalizerUsesDefaultComparer =
+        "ChainedHashMap<TKey,TValue,TFinalizer>" + MapDefaultComparerOnly + "ComparerChainedHashMap<TKey,TValue,TFinalizer>" + CreateWithComparer;
+
+    internal const string PooledHashSetUsesDefaultComparer =
+        "PooledHashSet<T>" + SetDefaultComparerOnly + "ComparerSwissHashSet<T>" + CreateOrWithComparer;
+    internal const string SwissHashSetUsesDefaultComparer =
+        "SwissHashSet<T>" + SetDefaultComparerOnly + "ComparerSwissHashSet<T>" + CreateWithComparer;
+    internal const string SwissHashSetFinalizerUsesDefaultComparer =
+        "SwissHashSet<T,TFinalizer>" + SetDefaultComparerOnly + "ComparerSwissHashSet<T,TFinalizer>" + CreateWithComparer;
+    internal const string RobinHoodHashSetUsesDefaultComparer =
+        "RobinHoodHashSet<T>" + SetDefaultComparerOnly + "ComparerRobinHoodHashSet<T>" + CreateWithComparer;
+    internal const string RobinHoodHashSetFinalizerUsesDefaultComparer =
+        "RobinHoodHashSet<T,TFinalizer>" + SetDefaultComparerOnly + "ComparerRobinHoodHashSet<T,TFinalizer>" + CreateWithComparer;
+    internal const string LinearHashSetUsesDefaultComparer =
+        "LinearHashSet<T>" + SetDefaultComparerOnly + "ComparerLinearHashSet<T>" + CreateWithComparer;
+    internal const string LinearHashSetFinalizerUsesDefaultComparer =
+        "LinearHashSet<T,TFinalizer>" + SetDefaultComparerOnly + "ComparerLinearHashSet<T,TFinalizer>" + CreateWithComparer;
+    internal const string ChainedHashSetUsesDefaultComparer =
+        "ChainedHashSet<T>" + SetDefaultComparerOnly + "ComparerChainedHashSet<T>" + CreateWithComparer;
+    internal const string ChainedHashSetFinalizerUsesDefaultComparer =
+        "ChainedHashSet<T,TFinalizer>" + SetDefaultComparerOnly + "ComparerChainedHashSet<T,TFinalizer>" + CreateWithComparer;
+
     internal static NotSupportedException ComparerRequiredException() => new(ComparerRequired);
+
+    internal static NotSupportedException NotSupported(string message) => new(message);
 }
 
 static class AliasGuards

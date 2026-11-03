@@ -1,4 +1,7 @@
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+#pragma warning disable IDE0028 // The collection builder ends in these `new Alias(capacity)` calls; `[with(capacity)]` here would recurse.
 
 namespace Prest;
 
@@ -15,14 +18,19 @@ namespace Prest;
 //   Comparer{Algo}HashSet<T,TFinalizer>  — runtime IEqualityComparer<T> + finalizer
 //
 // SwissHashSet<T> derives from PooledHashSet<T> (same configuration).
+//
+// Every alias supports collection expressions through PooledHashSetCollectionBuilder;
+// comparer misuse is a compile error, as for maps.
 // ---------------------------------------------------------------------------
 
 /// <summary>Default pooled hash set — SwissTable + default equality comparer + no finalizer.</summary>
 /// <remarks>
 /// Same configuration as <see cref="SwissHashSet{T}" />, which derives from this type.
 /// Not sealed so that <c>Prest.ObjectPool</c> can subclass it; instances of subclasses never
-/// enter this type's per-thread cache.
+/// enter this type's per-thread cache. Supports collection expressions, like every alias:
+/// <c>PooledHashSet&lt;string&gt; set = ["a", "b"];</c>
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.Create))]
 public class PooledHashSet<T>
     : PooledHashSet<T, SwissTableAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -50,6 +58,15 @@ public class PooledHashSet<T>
     /// </summary>
     public static new PooledHashSet<T> Create(int capacity) => TakeCached() ?? new PooledHashSet<T>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashSet{T}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static PooledHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static PooledHashSet<T>? TakeCached()
@@ -63,6 +80,7 @@ public class PooledHashSet<T>
 // ---- SwissTable ----
 
 /// <summary>SwissTable + default hasher + no finalizer. Derives from <see cref="PooledHashSet{T}" /> (same configuration).</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashSet<T>
     : PooledHashSet<T>
     where T : notnull
@@ -90,6 +108,15 @@ public sealed class SwissHashSet<T>
     /// </summary>
     public static new SwissHashSet<T> Create(int capacity) => TakeCached() ?? new SwissHashSet<T>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashSet{T}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.SwissHashSetUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static new SwissHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.SwissHashSetUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static SwissHashSet<T>? TakeCached()
@@ -101,6 +128,7 @@ public sealed class SwissHashSet<T>
 }
 
 /// <summary>SwissTable + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashSet<T, TFinalizer>
     : PooledHashSet<T, SwissTableAlgorithm<T, T, EqualityDefaultHasher<T>, TFinalizer>>
     where T : notnull
@@ -129,6 +157,15 @@ public sealed class SwissHashSet<T, TFinalizer>
     /// </summary>
     public static new SwissHashSet<T, TFinalizer> Create(int capacity) => TakeCached() ?? new SwissHashSet<T, TFinalizer>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerSwissHashSet{T,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.SwissHashSetFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static SwissHashSet<T, TFinalizer> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.SwissHashSetFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static SwissHashSet<T, TFinalizer>? TakeCached()
@@ -146,6 +183,7 @@ public sealed class SwissHashSet<T, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerSwissHashSet</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashSet<T, THasher, TFinalizer>
     : PooledHashSet<T, SwissTableAlgorithm<T, T, THasher, TFinalizer>>
     where T : notnull
@@ -196,6 +234,7 @@ public sealed class SwissHashSet<T, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerSwiss))]
 public sealed class ComparerSwissHashSet<T>
     : PooledHashSet<T, SwissTableAlgorithm<T, T, ComparerHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -253,6 +292,7 @@ public sealed class ComparerSwissHashSet<T>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerSwiss))]
 public sealed class ComparerSwissHashSet<T, TFinalizer>
     : PooledHashSet<T, SwissTableAlgorithm<T, T, ComparerHasher<T>, TFinalizer>>
     where T : notnull
@@ -307,6 +347,7 @@ public sealed class ComparerSwissHashSet<T, TFinalizer>
 // ---- Robin Hood ----
 
 /// <summary>Robin Hood + default hasher + no finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateRobinHood))]
 public sealed class RobinHoodHashSet<T>
     : PooledHashSet<T, RobinHoodAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -334,6 +375,15 @@ public sealed class RobinHoodHashSet<T>
     /// </summary>
     public static new RobinHoodHashSet<T> Create(int capacity) => TakeCached() ?? new RobinHoodHashSet<T>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerRobinHoodHashSet{T}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.RobinHoodHashSetUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static RobinHoodHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.RobinHoodHashSetUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static RobinHoodHashSet<T>? TakeCached()
@@ -345,6 +395,7 @@ public sealed class RobinHoodHashSet<T>
 }
 
 /// <summary>Robin Hood + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateRobinHood))]
 public sealed class RobinHoodHashSet<T, TFinalizer>
     : PooledHashSet<T, RobinHoodAlgorithm<T, T, EqualityDefaultHasher<T>, TFinalizer>>
     where T : notnull
@@ -373,6 +424,15 @@ public sealed class RobinHoodHashSet<T, TFinalizer>
     /// </summary>
     public static new RobinHoodHashSet<T, TFinalizer> Create(int capacity) => TakeCached() ?? new RobinHoodHashSet<T, TFinalizer>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerRobinHoodHashSet{T,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.RobinHoodHashSetFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static RobinHoodHashSet<T, TFinalizer> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.RobinHoodHashSetFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static RobinHoodHashSet<T, TFinalizer>? TakeCached()
@@ -390,6 +450,7 @@ public sealed class RobinHoodHashSet<T, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerRobinHoodHashSet</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateRobinHood))]
 public sealed class RobinHoodHashSet<T, THasher, TFinalizer>
     : PooledHashSet<T, RobinHoodAlgorithm<T, T, THasher, TFinalizer>>
     where T : notnull
@@ -440,6 +501,7 @@ public sealed class RobinHoodHashSet<T, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerRobinHood))]
 public sealed class ComparerRobinHoodHashSet<T>
     : PooledHashSet<T, RobinHoodAlgorithm<T, T, ComparerHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -497,6 +559,7 @@ public sealed class ComparerRobinHoodHashSet<T>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerRobinHood))]
 public sealed class ComparerRobinHoodHashSet<T, TFinalizer>
     : PooledHashSet<T, RobinHoodAlgorithm<T, T, ComparerHasher<T>, TFinalizer>>
     where T : notnull
@@ -551,6 +614,7 @@ public sealed class ComparerRobinHoodHashSet<T, TFinalizer>
 // ---- Linear probing ----
 
 /// <summary>Linear probing + default hasher + no finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateLinear))]
 public sealed class LinearHashSet<T>
     : PooledHashSet<T, LinearProbingAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -578,6 +642,15 @@ public sealed class LinearHashSet<T>
     /// </summary>
     public static new LinearHashSet<T> Create(int capacity) => TakeCached() ?? new LinearHashSet<T>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerLinearHashSet{T}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.LinearHashSetUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LinearHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.LinearHashSetUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static LinearHashSet<T>? TakeCached()
@@ -589,6 +662,7 @@ public sealed class LinearHashSet<T>
 }
 
 /// <summary>Linear probing + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateLinear))]
 public sealed class LinearHashSet<T, TFinalizer>
     : PooledHashSet<T, LinearProbingAlgorithm<T, T, EqualityDefaultHasher<T>, TFinalizer>>
     where T : notnull
@@ -617,6 +691,15 @@ public sealed class LinearHashSet<T, TFinalizer>
     /// </summary>
     public static new LinearHashSet<T, TFinalizer> Create(int capacity) => TakeCached() ?? new LinearHashSet<T, TFinalizer>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerLinearHashSet{T,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.LinearHashSetFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static LinearHashSet<T, TFinalizer> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.LinearHashSetFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static LinearHashSet<T, TFinalizer>? TakeCached()
@@ -634,6 +717,7 @@ public sealed class LinearHashSet<T, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerLinearHashSet</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateLinear))]
 public sealed class LinearHashSet<T, THasher, TFinalizer>
     : PooledHashSet<T, LinearProbingAlgorithm<T, T, THasher, TFinalizer>>
     where T : notnull
@@ -684,6 +768,7 @@ public sealed class LinearHashSet<T, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerLinear))]
 public sealed class ComparerLinearHashSet<T>
     : PooledHashSet<T, LinearProbingAlgorithm<T, T, ComparerHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -741,6 +826,7 @@ public sealed class ComparerLinearHashSet<T>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerLinear))]
 public sealed class ComparerLinearHashSet<T, TFinalizer>
     : PooledHashSet<T, LinearProbingAlgorithm<T, T, ComparerHasher<T>, TFinalizer>>
     where T : notnull
@@ -795,6 +881,7 @@ public sealed class ComparerLinearHashSet<T, TFinalizer>
 // ---- Separate chaining ----
 
 /// <summary>Separate chaining + default hasher + no finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateChained))]
 public sealed class ChainedHashSet<T>
     : PooledHashSet<T, ChainedAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -822,6 +909,15 @@ public sealed class ChainedHashSet<T>
     /// </summary>
     public static new ChainedHashSet<T> Create(int capacity) => TakeCached() ?? new ChainedHashSet<T>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerChainedHashSet{T}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.ChainedHashSetUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static ChainedHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.ChainedHashSetUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static ChainedHashSet<T>? TakeCached()
@@ -833,6 +929,7 @@ public sealed class ChainedHashSet<T>
 }
 
 /// <summary>Separate chaining + default hasher + user-chosen finalizer.</summary>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateChained))]
 public sealed class ChainedHashSet<T, TFinalizer>
     : PooledHashSet<T, ChainedAlgorithm<T, T, EqualityDefaultHasher<T>, TFinalizer>>
     where T : notnull
@@ -861,6 +958,15 @@ public sealed class ChainedHashSet<T, TFinalizer>
     /// </summary>
     public static new ChainedHashSet<T, TFinalizer> Create(int capacity) => TakeCached() ?? new ChainedHashSet<T, TFinalizer>(capacity);
 
+    /// <summary>
+    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
+    /// custom comparer use <see cref="ComparerChainedHashSet{T,TFinalizer}" />.
+    /// </summary>
+    [Obsolete(AliasErrors.ChainedHashSetFinalizerUsesDefaultComparer, error: true)]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static ChainedHashSet<T, TFinalizer> Create(IEqualityComparer<T> comparer, int capacity = 0)
+        => throw AliasErrors.NotSupported(AliasErrors.ChainedHashSetFinalizerUsesDefaultComparer);
+
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
     static ChainedHashSet<T, TFinalizer>? TakeCached()
@@ -878,6 +984,7 @@ public sealed class ChainedHashSet<T, TFinalizer>
 /// <see cref="IEqualityComparer{T}" /> use <c>ComparerChainedHashSet</c>;
 /// <see cref="ComparerHasher{T}" /> is rejected here with <see cref="NotSupportedException" />.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateChained))]
 public sealed class ChainedHashSet<T, THasher, TFinalizer>
     : PooledHashSet<T, ChainedAlgorithm<T, T, THasher, TFinalizer>>
     where T : notnull
@@ -928,6 +1035,7 @@ public sealed class ChainedHashSet<T, THasher, TFinalizer>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerChained))]
 public sealed class ComparerChainedHashSet<T>
     : PooledHashSet<T, ChainedAlgorithm<T, T, ComparerHasher<T>, NoOpHashFinalizer>>
     where T : notnull
@@ -985,6 +1093,7 @@ public sealed class ComparerChainedHashSet<T>
 /// instance (reference equality — e.g. <see cref="StringComparer.OrdinalIgnoreCase" />);
 /// any other comparer releases the cached instance and allocates a new set.
 /// </remarks>
+[CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateComparerChained))]
 public sealed class ComparerChainedHashSet<T, TFinalizer>
     : PooledHashSet<T, ChainedAlgorithm<T, T, ComparerHasher<T>, TFinalizer>>
     where T : notnull
