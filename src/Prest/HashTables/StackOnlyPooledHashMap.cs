@@ -19,7 +19,7 @@ namespace Prest;
 /// Use <c>using var map = new StackOnlyPooledHashMap&lt;TKey, TValue, TAlgo&gt;(16);</c> so
 /// <see cref="Dispose" /> returns the buffers to <see cref="ArrayPool{T}.Shared" />. <c>default</c>
 /// and <c>new()</c> are empty maps that rent on the first add. For the default configuration
-/// (SwissTable, <see cref="EqualityDefaultHasher{T}" />, <see cref="NoOpHashFinalizer" />) use
+/// (SwissTable with an optional comparer, like <see cref="PooledHashMap{TKey,TValue}" />) use
 /// <see cref="StackOnlyPooledHashMap{TKey,TValue}" />.
 /// </para>
 /// <para>
@@ -175,8 +175,8 @@ public ref struct StackOnlyPooledHashMap<TKey, TValue, TAlgo> : IDisposable
 }
 
 /// <summary>
-/// Default stack-only pooled hash map — SwissTable + <see cref="EqualityDefaultHasher{T}" /> +
-/// <see cref="NoOpHashFinalizer" />, the same configuration as <see cref="PooledHashMap{TKey,TValue}" />.
+/// Default stack-only pooled hash map — SwissTable with <see cref="EqualityComparer{T}.Default" />
+/// or a comparer you pass, the same configuration as <see cref="PooledHashMap{TKey,TValue}" />.
 /// Compiler-enforced single-consumer: cannot be stored in a field, boxed, or captured across
 /// <c>await</c>.
 /// </summary>
@@ -204,13 +204,33 @@ public ref struct StackOnlyPooledHashMap<TKey, TValue> : IDisposable
     // The default configuration is spelled out here only. The enumerator and collection types
     // below are named through PooledHashMap<TKey, TValue>, so the two defaults cannot drift
     // apart without a compile error.
-    StackOnlyPooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, EqualityDefaultHasher<TKey>, NoOpHashFinalizer>> _map;
+    StackOnlyPooledHashMap<TKey, TValue, SwissTableAlgorithm<KeyValueSlot<TKey, TValue>, TKey, OptionalComparerHasher<TKey>, NoOpHashFinalizer>> _map;
+
+    // Null means EqualityComparer<TKey>.Default (OptionalComparerHasher.Normalize).
+    readonly IEqualityComparer<TKey>? _comparer;
 
     /// <summary>
     /// Creates a map with at least <paramref name="capacity" /> slots pre-allocated. A capacity
     /// of zero or less defers renting to the first add.
     /// </summary>
-    public StackOnlyPooledHashMap(int capacity) => _map = new(capacity);
+    public StackOnlyPooledHashMap(int capacity) : this(capacity, null) { }
+
+    /// <summary>
+    /// Creates a map that uses <paramref name="comparer" /> for key equality
+    /// (<see langword="null" /> means <see cref="EqualityComparer{T}.Default" />), with at least
+    /// <paramref name="capacity" /> slots pre-allocated.
+    /// </summary>
+    public StackOnlyPooledHashMap(int capacity, IEqualityComparer<TKey>? comparer)
+    {
+        _comparer = OptionalComparerHasher<TKey>.Normalize(comparer);
+        _map = new(capacity, new(new OptionalComparerHasher<TKey>(_comparer), default));
+    }
+
+    /// <summary>
+    /// The comparer this map uses for key hashing and equality: the one passed to the constructor,
+    /// or <see cref="EqualityComparer{T}.Default" />.
+    /// </summary>
+    public readonly IEqualityComparer<TKey> Comparer => _comparer ?? EqualityComparer<TKey>.Default;
 
     /// <inheritdoc cref="StackOnlyPooledHashMap{TKey,TValue,TAlgo}.Count" />
     public readonly int Count

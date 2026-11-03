@@ -17,28 +17,52 @@ namespace Prest;
 //   Comparer{Algo}HashSet<T>             — runtime IEqualityComparer<T>
 //   Comparer{Algo}HashSet<T,TFinalizer>  — runtime IEqualityComparer<T> + finalizer
 //
-// SwissHashSet<T> derives from PooledHashSet<T> (same configuration).
+// PooledHashSet<T> is the default: SwissTable with an optional runtime comparer, like
+// HashSet<T> (OptionalComparerHasher). SwissHashSet<T> is SwissTable with
+// EqualityDefaultHasher and no comparer: the fastest default-equality configuration.
 //
 // Every alias supports collection expressions through PooledHashSetCollectionBuilder;
 // comparer misuse is a compile error, as for maps.
 // ---------------------------------------------------------------------------
 
-/// <summary>Default pooled hash set — SwissTable + default equality comparer + no finalizer.</summary>
+/// <summary>
+/// Default pooled hash set: SwissTable, with <see cref="EqualityComparer{T}.Default" /> or a
+/// comparer you pass, like <see cref="HashSet{T}" />.
+/// </summary>
 /// <remarks>
-/// Same configuration as <see cref="SwissHashSet{T}" />, which derives from this type.
+/// <para>
+/// Pass a comparer through <see cref="Create(IEqualityComparer{T}, int)" /> or a collection
+/// expression: <c>PooledHashSet&lt;string&gt; set = [with(StringComparer.OrdinalIgnoreCase)];</c>.
+/// Without one, items use <see cref="EqualityComparer{T}.Default" />. Each hash and equality check
+/// first tests whether a comparer was given. That is cheap next to hashing a string but measurable
+/// for integer items; <see cref="SwissHashSet{T}" /> skips it.
+/// </para>
+/// <para>
 /// Not sealed so that <c>Prest.ObjectPool</c> can subclass it; instances of subclasses never
-/// enter this type's per-thread cache. Supports collection expressions, like every alias:
-/// <c>PooledHashSet&lt;string&gt; set = ["a", "b"];</c>
+/// enter this type's per-thread cache.
+/// </para>
 /// </remarks>
 [CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.Create))]
 public class PooledHashSet<T>
-    : PooledHashSet<T, SwissTableAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>>
+    : PooledHashSet<T, SwissTableAlgorithm<T, T, OptionalComparerHasher<T>, NoOpHashFinalizer>>
     where T : notnull
 {
     [ThreadStatic]
     static PooledHashSet<T>? _threadCache;
 
-    protected PooledHashSet(int capacity = 0) : base(capacity) { }
+    // Null means EqualityComparer<T>.Default (OptionalComparerHasher.Normalize).
+    readonly IEqualityComparer<T>? _comparer;
+
+    protected PooledHashSet(int capacity = 0) : this(null, capacity) { }
+
+    protected PooledHashSet(IEqualityComparer<T>? comparer, int capacity)
+        : base(capacity, Algorithm(comparer)) => _comparer = OptionalComparerHasher<T>.Normalize(comparer);
+
+    /// <summary>
+    /// The comparer this set uses for hashing and equality: the one passed to <c>Create</c>, or
+    /// <see cref="EqualityComparer{T}.Default" />.
+    /// </summary>
+    public IEqualityComparer<T> Comparer => _comparer ?? EqualityComparer<T>.Default;
 
     /// <summary>
     /// Returns a set from this type's per-thread cache, or allocates a new one. Pair with
@@ -47,25 +71,39 @@ public class PooledHashSet<T>
     /// </summary>
     /// <remarks>
     /// Single-slot cache per thread, separate for every alias type. A second
-    /// <see cref="Create()" /> before the first is returned allocates fresh.
+    /// <see cref="Create()" /> before the first is returned allocates fresh. A cached set is
+    /// reused only when it uses the same comparer.
     /// </remarks>
-    public static new PooledHashSet<T> Create() => TakeCached() ?? new PooledHashSet<T>(0);
+    public static new PooledHashSet<T> Create() => Create(null, 0);
 
     /// <summary>
     /// Returns a set with at least <paramref name="capacity" /> slots pre-allocated.
     /// A cached instance is reused regardless of its current capacity; the hint
     /// applies only when allocating a fresh instance.
     /// </summary>
-    public static new PooledHashSet<T> Create(int capacity) => TakeCached() ?? new PooledHashSet<T>(capacity);
+    public static new PooledHashSet<T> Create(int capacity) => Create(null, capacity);
 
     /// <summary>
-    /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
-    /// custom comparer use <see cref="ComparerSwissHashSet{T}" />.
+    /// Returns a set that uses <paramref name="comparer" /> for equality (<see langword="null" />
+    /// means <see cref="EqualityComparer{T}.Default" />). Reuses this type's per-thread cached
+    /// instance when it uses the same comparer instance; otherwise releases the cached instance
+    /// and allocates a new set. The capacity hint applies only when allocating.
     /// </summary>
-    [Obsolete(AliasErrors.PooledHashSetUsesDefaultComparer, error: true)]
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public static PooledHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
-        => throw AliasErrors.NotSupported(AliasErrors.PooledHashSetUsesDefaultComparer);
+    public static PooledHashSet<T> Create(IEqualityComparer<T>? comparer, int capacity = 0)
+    {
+        comparer = OptionalComparerHasher<T>.Normalize(comparer);
+        var cached = _threadCache;
+        if (cached is not null)
+        {
+            _threadCache = null;
+            if (ReferenceEquals(cached._comparer, comparer))
+            {
+                return cached;
+            }
+            cached.ReleaseBuffers();
+        }
+        return new PooledHashSet<T>(comparer, capacity);
+    }
 
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);
 
@@ -75,14 +113,21 @@ public class PooledHashSet<T>
         _threadCache = null;
         return cached;
     }
+
+    static SwissTableAlgorithm<T, T, OptionalComparerHasher<T>, NoOpHashFinalizer> Algorithm(IEqualityComparer<T>? comparer)
+        => new(new OptionalComparerHasher<T>(comparer), default);
 }
 
 // ---- SwissTable ----
 
-/// <summary>SwissTable + default hasher + no finalizer. Derives from <see cref="PooledHashSet{T}" /> (same configuration).</summary>
+/// <summary>
+/// SwissTable + default hasher + no finalizer: the fastest configuration for default
+/// equality. Unlike <see cref="PooledHashSet{T}" /> it takes no comparer, so no hash or
+/// equality check pays for one.
+/// </summary>
 [CollectionBuilder(typeof(PooledHashSetCollectionBuilder), nameof(PooledHashSetCollectionBuilder.CreateSwiss))]
 public sealed class SwissHashSet<T>
-    : PooledHashSet<T>
+    : PooledHashSet<T, SwissTableAlgorithm<T, T, EqualityDefaultHasher<T>, NoOpHashFinalizer>>
     where T : notnull
 {
     [ThreadStatic]
@@ -110,11 +155,11 @@ public sealed class SwissHashSet<T>
 
     /// <summary>
     /// Not supported — this alias always uses <see cref="EqualityComparer{T}.Default" />. For a
-    /// custom comparer use <see cref="ComparerSwissHashSet{T}" />.
+    /// custom comparer use <see cref="PooledHashSet{T}" /> or <see cref="ComparerSwissHashSet{T}" />.
     /// </summary>
     [Obsolete(AliasErrors.SwissHashSetUsesDefaultComparer, error: true)]
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static new SwissHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
+    public static SwissHashSet<T> Create(IEqualityComparer<T> comparer, int capacity = 0)
         => throw AliasErrors.NotSupported(AliasErrors.SwissHashSetUsesDefaultComparer);
 
     private protected override void ReturnToCache() => ReturnToSlot(ref _threadCache, this);

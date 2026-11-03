@@ -29,7 +29,7 @@ public class AlgorithmComparisonBenchmarks
         }
 
         _dict = new Dictionary<int, int>(N);
-        _swiss = PooledHashMap<int, int>.Create(N);
+        _swiss = SwissHashMap<int, int>.Create(N);
         _linear = LinearHashMap<int, int>.Create(N);
         _robin = RobinHoodHashMap<int, int>.Create(N);
         _chained = ChainedHashMap<int, int>.Create(N);

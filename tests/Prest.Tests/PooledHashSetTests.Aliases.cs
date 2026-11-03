@@ -113,11 +113,10 @@ public partial class PooledHashSetTests
         fields.RobinHood.Add(Item);
         fields.IgnoreCase.Add(Item);
         fields.LastDigit.Add(Number);
-        var swissSeenAsDefault = CountThroughDefaultAlias(fields.Swiss);
 
         // Assert
         await Assert.That(fields.Default.Contains(Item)).IsTrue();
-        await Assert.That(swissSeenAsDefault).IsEqualTo(1);
+        await Assert.That(fields.Swiss.Contains(Item)).IsTrue();
         await Assert.That(fields.RobinHood.Contains(Item)).IsTrue();
         await Assert.That(fields.IgnoreCase.Contains(OtherCaseItem)).IsTrue();
         await Assert.That(fields.LastDigit.Contains(Number + 10)).IsTrue();
@@ -264,8 +263,6 @@ public partial class PooledHashSetTests
             return (added, set.Contains(otherSameDigitItem), set.Count);
         }
     }
-
-    static int CountThroughDefaultAlias(PooledHashSet<string> set) => set.Count;
 
     // Fields declared with the short alias types, initialized straight from their Create.
     sealed class AliasFields : IDisposable

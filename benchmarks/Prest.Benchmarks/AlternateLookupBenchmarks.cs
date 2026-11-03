@@ -58,7 +58,7 @@ public class AlternateLookupBenchmarks
 
         _dict = new Dictionary<string, int>(N);
         _dictUtf8 = new Dictionary<string, int>(N, new Utf8OrdinalComparer());
-        _swiss = PooledHashMap<string, int>.Create(N);
+        _swiss = SwissHashMap<string, int>.Create(N);
         _robin = RobinHoodHashMap<string, int>.Create(N);
         _linear = LinearHashMap<string, int>.Create(N);
         _chained = ChainedHashMap<string, int>.Create(N);

@@ -11,8 +11,9 @@ static class HasherComparer
 {
     /// <summary>
     /// Returns <see cref="EqualityComparer{T}.Default" /> for <see cref="EqualityDefaultHasher{T}" />,
-    /// the wrapped comparer for <see cref="ComparerHasher{T}" />, and <see langword="null" /> for any
-    /// other hasher. The <see langword="typeof" /> checks are JIT-time constants, so each closed
+    /// the wrapped comparer for <see cref="ComparerHasher{T}" />, the comparer in use for
+    /// <see cref="OptionalComparerHasher{T}" />, and <see langword="null" /> for any other hasher.
+    /// The <see langword="typeof" /> checks are JIT-time constants, so each closed
     /// algorithm compiles to just its own branch.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -28,6 +29,11 @@ static class HasherComparer
         if (typeof(THasher) == typeof(ComparerHasher<T>))
         {
             return Unsafe.As<THasher, ComparerHasher<T>>(ref Unsafe.AsRef(in hasher)).Comparer;
+        }
+
+        if (typeof(THasher) == typeof(OptionalComparerHasher<T>))
+        {
+            return Unsafe.As<THasher, OptionalComparerHasher<T>>(ref Unsafe.AsRef(in hasher)).Comparer;
         }
 
         return null;
