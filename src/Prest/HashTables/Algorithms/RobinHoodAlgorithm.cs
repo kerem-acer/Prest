@@ -313,10 +313,14 @@ public struct RobinHoodAlgorithm<TSlot, TKey, THasher, TFinalizer> : IHashAlgori
         }
 
         // A displaced entry hit the distance cap. The new entry is already in the
-        // table, so grow (which rehashes it with everything else) and re-place the
-        // displaced one.
+        // table (at slotIdx, which no later swap touches), so grow (which rehashes
+        // it with everything else) and re-place the displaced one. Then look the
+        // new entry up again: slotIdx must name it, not the displaced entry.
+        var newKey = default(TExtractor).Extract(in Unsafe.Add(ref slotBase, (nint)(uint)slotIdx));
         Grow<TExtractor>();
-        return Insert<TExtractor>(default(TExtractor).Extract(in inFlightSlot), inFlightSlot, out slotIdx);
+        Insert<TExtractor>(default(TExtractor).Extract(in inFlightSlot), inFlightSlot, out _);
+        Insert<TExtractor>(newKey, default!, out slotIdx);
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
