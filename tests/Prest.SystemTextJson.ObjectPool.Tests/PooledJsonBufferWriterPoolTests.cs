@@ -4,9 +4,16 @@ using System.Text;
 
 namespace Prest.SystemTextJson.ObjectPool.Tests;
 
+// The pools are static and shared by every test in this assembly, and TUnit runs tests in parallel.
+// A reuse assertion fails if another test rents between this test's Return and Rent, so tests that
+// touch the same pool share a NotInParallel key (as in Prest.ObjectPool.Tests).
 public class PooledJsonBufferWriterPoolTests
 {
+    const string CompactPool = "PooledJsonBufferWriterPool.Compact";
+    const string IndentedPool = "PooledJsonBufferWriterPool.Indented";
+
     [Test]
+    [NotInParallel(CompactPool)]
     public async Task RentReturn_Compact_ReusesInstance()
     {
         var first = PooledJsonBufferWriterPool.Rent(indented: false);
@@ -25,6 +32,7 @@ public class PooledJsonBufferWriterPoolTests
     }
 
     [Test]
+    [NotInParallel(IndentedPool)]
     public async Task RentReturn_Indented_UsesIndentedPool()
     {
         var writer = PooledJsonBufferWriterPool.Rent(indented: true);
@@ -46,6 +54,7 @@ public class PooledJsonBufferWriterPoolTests
     }
 
     [Test]
+    [NotInParallel(CompactPool)]
     public async Task SurvivesAsync_AcrossAwait()
     {
         var writer = PooledJsonBufferWriterPool.Rent(indented: false);
